@@ -12,7 +12,7 @@ import pickle
 import argparse
 from .io import _numpy_to_tensor, _load_cpu, _load_gpu
 from .params import *
-
+from pdb import *
 
 def _parse_param(param):
     """Work for both numpy and tensor"""
@@ -115,7 +115,9 @@ class DDFADataset(data.Dataset):
         self.root = root
         self.transform = transform
         self.lines = Path(filelists).read_text().strip().split('\n')
-        self.params = _numpy_to_tensor(_load_cpu(param_fp))
+        # set_trace()
+        param = pickle.load(open(param_fp[1:-1],'rb'))
+        self.params = _numpy_to_tensor(param) #_numpy_to_tensor(_load_cpu(param_fp))
         self.img_loader = img_loader
 
     def _target_loader(self, index):
@@ -124,7 +126,9 @@ class DDFADataset(data.Dataset):
         return target
 
     def __getitem__(self, index):
+        # set_trace()
         path = osp.join(self.root, self.lines[index])
+        # print(path)
         img = self.img_loader(path)
 
         target = self._target_loader(index)

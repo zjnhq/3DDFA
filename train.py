@@ -20,7 +20,7 @@ from utils.ddfa import str2bool, AverageMeter
 from utils.io import mkdir
 from vdc_loss import VDCLoss
 from wpdc_loss import WPDCLoss
-
+from pdb import *
 # global args (configuration)
 args = None
 lr = None
@@ -221,6 +221,7 @@ def main():
                                 nesterov=True)
     # step 2.1 resume
     if args.resume:
+        set_trace()
         if Path(args.resume).is_file():
             logging.info(f'=> loading checkpoint {args.resume}')
 

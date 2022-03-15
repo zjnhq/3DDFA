@@ -1,0 +1,31 @@
+[2022-03-15 11:09:00,910] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] workers: 8
+[2022-03-15 11:09:00,911] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] epochs: 50
+[2022-03-15 11:09:00,913] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] start_epoch: 1
+[2022-03-15 11:09:00,913] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] batch_size: 32
+[2022-03-15 11:09:00,913] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] val_batch_size: 32
+[2022-03-15 11:09:00,914] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] base_lr: 0.02
+[2022-03-15 11:09:00,915] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] momentum: 0.9
+[2022-03-15 11:09:00,915] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] weight_decay: 0.0005
+[2022-03-15 11:09:00,916] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] print_freq: 50
+[2022-03-15 11:09:00,917] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] resume: 'models/phase1_wpdc_vdc.pth.tar'
+[2022-03-15 11:09:00,918] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] devices_id: [0]
+[2022-03-15 11:09:00,919] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] filelists_train: D:/data/facealignment/train.configs/train_aug_120x120.list.train
+[2022-03-15 11:09:00,920] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] filelists_val: D:/data/facealignment/train.configs/train_aug_120x120.list.val
+[2022-03-15 11:09:00,921] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] root: D:\data\facealignment\train_aug_120x120
+[2022-03-15 11:09:00,924] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] snapshot: snapshot/phase1_wpdc
+[2022-03-15 11:09:00,925] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] log_file: output.log
+[2022-03-15 11:09:00,925] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] log_mode: w
+[2022-03-15 11:09:00,926] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] size_average: True
+[2022-03-15 11:09:00,926] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] num_classes: 62
+[2022-03-15 11:09:00,927] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] arch: mobilenet_1
+[2022-03-15 11:09:00,928] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] frozen: False
+[2022-03-15 11:09:00,929] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] milestones: [30, 40]
+[2022-03-15 11:09:00,930] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] task: all
+[2022-03-15 11:09:00,930] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] test_initial: False
+[2022-03-15 11:09:00,931] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] warmup: 5
+[2022-03-15 11:09:00,931] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] param_fp_train: 'D:/data/facealignment/train.configs/param_all_norm.pkl'
+[2022-03-15 11:09:00,932] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] param_fp_val: 'D:/data/facealignment/train.configs/param_all_norm_val.pkl'
+[2022-03-15 11:09:00,932] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] opt_style: resample
+[2022-03-15 11:09:00,933] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] resample_num: 132
+[2022-03-15 11:09:00,933] [p28064] [D:\code\face\3DDFA\train.py:84] [INFO] loss: wpdc
+[2022-03-15 11:09:01,102] [p28064] [D:\code\face\3DDFA\train.py:207] [INFO] Use WPDC Loss
