@@ -13,7 +13,7 @@ Modified By cleardusk
 """
 import math
 import torch.nn as nn
-
+from pdb import *
 __all__ = ['mobilenet_2', 'mobilenet_1', 'mobilenet_075', 'mobilenet_05', 'mobilenet_025']
 
 
@@ -90,11 +90,13 @@ class MobileNet(nn.Module):
             elif isinstance(m, nn.BatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
+        self.midfeature_grad = False
 
     def forward(self, x):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
+        # set_trace()
 
         x = self.dw2_1(x)
         x = self.dw2_2(x)
@@ -107,14 +109,23 @@ class MobileNet(nn.Module):
         x = self.dw5_3(x)
         x = self.dw5_4(x)
         x = self.dw5_5(x)
-        x = self.dw5_6(x)
-        x = self.dw6(x)
+        # x = self.dw5_6(x)
+        
+        self.mid_features = self.dw5_6(x)#.cpu().detach().numpy()
+        if self.midfeature_grad:
+            self.mid_features.retain_grad()
+        else:
+            self.mid_features.detach()
+        x2 = self.dw6(self.mid_features)
 
-        x = self.avgpool(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc(x)
+        x2 = self.avgpool(x2)
+        x2 = x2.view(x2.size(0), -1)
 
-        return x
+        x2 = self.fc(x2)
+
+        return x2
+    def SetMidfeatureNeedGrad(self, MidfeatureNeedGrad=False):
+        self.midfeature_grad = MidfeatureNeedGrad
 
 
 def mobilenet(widen_factor=1.0, num_classes=1000):

@@ -109,6 +109,13 @@ class NormalizeGjz(object):
         tensor.sub_(self.mean).div_(self.std)
         return tensor
 
+class NormalizeGjzNumpy(object):
+    def __init__(self, mean, std):
+        self.mean = mean
+        self.std = std
+
+    def __call__(self, tensor):
+        return np.div(tensor - self.mean, self.std)
 
 class DDFADataset(data.Dataset):
     def __init__(self, root, filelists, param_fp, transform=None, **kargs):

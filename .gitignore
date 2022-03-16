@@ -30,3 +30,4 @@ PAF/
 
 samples/*.obj
 .vscode/
+output.log

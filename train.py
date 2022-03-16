@@ -20,6 +20,7 @@ from utils.ddfa import str2bool, AverageMeter
 from utils.io import mkdir
 from vdc_loss import VDCLoss
 from wpdc_loss import WPDCLoss
+import pickle as pkl
 from pdb import *
 # global args (configuration)
 args = None
@@ -29,6 +30,7 @@ arch_choices = ['mobilenet_2', 'mobilenet_1', 'mobilenet_075', 'mobilenet_05', '
 
 def parse_args():
     parser = argparse.ArgumentParser(description='3DMM Fitting')
+    parser.add_argument('--gbdt', default=0, type=int)
     parser.add_argument('-j', '--workers', default=6, type=int)
     parser.add_argument('--epochs', default=40, type=int)
     parser.add_argument('--start-epoch', default=1, type=int)
@@ -110,7 +112,7 @@ def save_checkpoint(state, filename='checkpoint.pth.tar'):
     logging.info(f'Save checkpoint to {filename}')
 
 
-def train(train_loader, model, criterion, optimizer, epoch):
+def train(train_loader, model, criterion, optimizer, epoch, args):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -153,6 +155,143 @@ def train(train_loader, model, criterion, optimizer, epoch):
                          f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                          # f'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
                          f'Loss {losses.val:.4f} ({losses.avg:.4f})')
+
+def train_gbdt(train_loader, model, criterion, optimizer, epoch, args):
+
+    # if args.loss.lower() == 'vdc':
+    #     loss = criterion(output, target)
+    # elif args.loss.lower() == 'wpdc':
+    #     loss = criterion(output, target)
+    # elif args.loss.lower() == 'pdc':
+    #     loss = criterion(output, target)
+    # else:
+    #     raise Exception(f'Unknown loss {args.loss}')
+
+    batch_time = AverageMeter()
+    data_time = AverageMeter()
+    losses = AverageMeter()
+
+    model.train()
+
+    end = time.time()
+    # loader is batch style
+    # for i, (input, target) in enumerate(train_loader):
+
+    # build a batch of raw/mid features for GBDT training
+    batch_size= args.batch_size
+    
+    rawfeature_dim = 0
+    midfeature_dim = 0
+    mid_features = 0 
+    target_dim = 0
+    model.eval()
+    for i, (input, target) in enumerate(train_loader):
+        rawfeature_dim =  input.shape[1] * input.shape[2] *input.shape[3] 
+        target_dim = target.shape[1]
+        output = model(input)
+        mid_features = model.module.mid_features
+        midfeature_dim = mid_features.shape[1]* mid_features.shape[2] * mid_features.shape[3] 
+        # set_trace()
+        break
+    feature_dim = rawfeature_dim + midfeature_dim
+    feature_idx = 0
+    batched_mid_features= np.zeros([batch_size, feature_dim])
+    
+    # try to accumulate the gradient abs, to select stable features of small gradients
+    model = model.cuda()
+    model.module.SetMidfeatureNeedGrad(True)
+    for i, (input, target) in enumerate(train_loader):
+        input = input.cuda()
+        input.requires_grad = True
+        input.retain_grad()
+        target = target.cuda(non_blocking=True)
+        output = model(input)
+        loss = criterion(output, target)
+        loss.backward()
+        grad = input.grad.cpu().detach().numpy().reshape(batch_size,-1)
+        batched_mid_features[:,:rawfeature_dim] += np.abs(grad).reshape(batch_size,-1)
+        grad2 = model.module.mid_features.grad.cpu().detach().numpy()
+        batched_mid_features[:,rawfeature_dim:] += np.abs(grad2).reshape(batch_size,-1)
+        if i>2:break
+    
+    # set_trace()
+    feature_importance = batched_mid_features.mean(axis=0)
+    num_feat = int(min(rawfeature_dim/8, midfeature_dim/4))
+    important_rawfeature = np.argpartition(feature_importance[:rawfeature_dim], num_feat)[: num_feat]
+    important_midfeature = np.argpartition(feature_importance[rawfeature_dim:], num_feat)[: num_feat]
+    # important_midfeature = important_midfeature + rawfeature_dim
+    # important_rawfeature = np.argpartition(feature_importance, - num_feat)[- num_feat:]
+    # important_feature= [important_rawfeature, important_midfeature]
+    feature_dim = important_rawfeature.shape[0] + important_midfeature.shape[0]
+
+    num_batch_feat_gbdt = 3
+    batched_feature_sz = int(batch_size * num_batch_feat_gbdt)
+    batched_mid_features = np.zeros([batched_feature_sz, feature_dim])
+    batched_target = np.zeros([batched_feature_sz, target_dim])
+    feature_idx = 0
+
+    # model.eval()
+    model = model.cpu()
+    torch.set_num_interop_threads(8)
+    model.module = model.module.cpu()
+    model.module.SetMidfeatureNeedGrad(False)
+    fileid = 0
+
+    for i, (input, target) in enumerate(train_loader):
+        set_trace()
+        if(feature_idx + batch_size > batched_feature_sz):
+            feature_idx = 0
+            filename = 'gbdt_feature' +str(fileid)+'.pkl'
+            fileid += 1
+            pkl.dump([batched_mid_features, batched_target], open(filename,'wb'))
+
+        target = target.cpu()
+        input = input.cpu()#.cuda(non_blocking=True)
+        target.requires_grad = False
+        # input.requires_grad = True
+        input = input#.cuda()
+        output = model(input)
+        rawfeat = input.cpu().detach().numpy().reshape(batch_size,-1)[:,important_rawfeature]
+        batched_mid_features[feature_idx:feature_idx + batch_size, :num_feat] = rawfeat
+        midfeat = model.module.mid_features.cpu().detach().numpy().reshape(batch_size,-1)[:,important_midfeature]
+        batched_mid_features[feature_idx:feature_idx + batch_size, num_feat:] = midfeat
+        batched_target[feature_idx:feature_idx + batch_size] = target.cpu().detach().numpy()
+        feature_idx += batch_size
+    
+
+    # # model.eval()
+    # for i, (input, target) in enumerate(train_loader):
+        
+    #     target = target.cuda(non_blocking=True)
+    #     target.requires_grad = False
+    #     input.requires_grad = True
+    #     input = input.cuda()
+    #     input.retain_grad()
+    #     output = model(input)
+    #     data_time.update(time.time() - end)
+    #     losses.update(loss.item(), input.size(0))
+    #     # compute gradient and do SGD step
+    #     # optimizer.zero_grad()
+    #     loss.backward()
+    #     # optimizer.step()
+    #     set_trace()
+    #     if(feature_idx + batch_size >= batched_feature_sz):
+    #         feature_idx = 0
+    #     batched_mid_features[feature_idx:feature_idx + batch_size] = input.cpu().to_numpy().grad 
+    #     feature_idx += batch_size
+
+    #     # measure elapsed time
+    #     batch_time.update(time.time() - end)
+    #     end = time.time()
+
+    #     # log
+    #     if i % args.print_freq == 0:
+    #         logging.info(f'Epoch: [{epoch}][{i}/{len(train_loader)}]\t'
+    #                      f'LR: {lr:8f}\t'
+    #                      f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+    #                      # f'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
+    #                      f'Loss {losses.val:.4f} ({losses.avg:.4f})')
+
 
 
 def validate(val_loader, model, criterion, epoch):
@@ -221,7 +360,6 @@ def main():
                                 nesterov=True)
     # step 2.1 resume
     if args.resume:
-        set_trace()
         if Path(args.resume).is_file():
             logging.info(f'=> loading checkpoint {args.resume}')
 
@@ -259,23 +397,33 @@ def main():
         logging.info('Testing from initial')
         validate(val_loader, model, criterion, args.start_epoch)
 
-    for epoch in range(args.start_epoch, args.epochs + 1):
-        # adjust learning rate
-        adjust_learning_rate(optimizer, epoch, args.milestones)
+    # set_trace()
+    if args.gbdt==1:
+        for epoch in range(args.start_epoch, args.epochs + 1):
+            # adjust learning rate
+            adjust_learning_rate(optimizer, epoch, args.milestones)
 
-        # train for one epoch
-        train(train_loader, model, criterion, optimizer, epoch)
-        filename = f'{args.snapshot}_checkpoint_epoch_{epoch}.pth.tar'
-        save_checkpoint(
-            {
-                'epoch': epoch,
-                'state_dict': model.state_dict(),
-                # 'optimizer': optimizer.state_dict()
-            },
-            filename
-        )
+            # train for one epoch
+            train_gbdt(train_loader, model, criterion, optimizer, epoch, args)
 
-        validate(val_loader, model, criterion, epoch)
+    else:
+        for epoch in range(args.start_epoch, args.epochs + 1):
+            # adjust learning rate
+            adjust_learning_rate(optimizer, epoch, args.milestones)
+
+            # train for one epoch
+            train_gbdt(train_loader, model, criterion, optimizer, epoch, args)
+            filename = f'{args.snapshot}_checkpoint_epoch_{epoch}.pth.tar'
+            save_checkpoint(
+                {
+                    'epoch': epoch,
+                    'state_dict': model.state_dict(),
+                    # 'optimizer': optimizer.state_dict()
+                },
+                filename
+            )
+
+            validate(val_loader, model, criterion, epoch)
 
 
 if __name__ == '__main__':
