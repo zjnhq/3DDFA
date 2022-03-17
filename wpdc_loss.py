@@ -62,8 +62,12 @@ class WPDCLoss(nn.Module):
         u_base = self.u[keypoints_mix]
         w_exp_base = self.w_exp[keypoints_mix]
 
-        input = torch.tensor(input_.data.clone(), requires_grad=False)
-        target = torch.tensor(target_.data.clone(), requires_grad=False)
+        # input = torch.tensor(input_.data.clone(), requires_grad=False)
+        # target = torch.tensor(target_.data.clone(), requires_grad=False)
+        input = input_.clone().detach()
+        input.requires_grad=False
+        target = target_.clone().detach()
+        target.requires_grad=False
 
         (p, offset, alpha_shp, alpha_exp), (pg, offsetg, alpha_shpg, alpha_expg) \
             = self.reconstruct_and_parse(input, target)

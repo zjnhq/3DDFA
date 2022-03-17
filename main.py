@@ -26,13 +26,16 @@ from utils.render import get_depths_image, cget_depths_image, cpncc
 from utils.paf import gen_img_paf
 import argparse
 import torch.backends.cudnn as cudnn
-
+from pdb import *
+from sklearn.ensemble import *
+import pickle as pkl
 STD_SIZE = 120
 
 
 def main(args):
     # 1. load pre-tained model
-    checkpoint_fp = 'models/phase1_wpdc_vdc.pth.tar'
+    # checkpoint_fp = 'models/phase1_wpdc_vdc.pth.tar'
+    checkpoint_fp = 'models/phase1_wpdc.pth.tar'
     arch = 'mobilenet_1'
 
     checkpoint = torch.load(checkpoint_fp, map_location=lambda storage, loc: storage)['state_dict']
@@ -54,6 +57,18 @@ def main(args):
         face_regressor = dlib.shape_predictor(dlib_landmark_model)
     if args.dlib_bbox:
         face_detector = dlib.get_frontal_face_detector()
+
+    if args.gbdt==1:
+        feat_index_filename = 'important_feature.pkl'
+        gbdt_param_filename = './gbdt_param/gbdt_param'
+        [important_rawfeature, important_midfeature, num_feat, target_dim]=pkl.load(open(feat_index_filename,'rb'))
+        lightgbms = []
+        target_dim = 62
+        for i in range(target_dim):
+            lightgbm = pkl.load(open(gbdt_param_filename + str(i) + '.pkl','rb'))
+            lightgbms.append(lightgbm)
+        batched_gbdt_features = np.zeros([1,num_feat + num_feat])
+        batched_gbdt_predict = np.zeros([1,target_dim])
 
     # 3. forward
     tri = sio.loadmat('visualize/tri.mat')['tri']
@@ -80,6 +95,9 @@ def main(args):
         vertices_lst = []  # store multiple face vertices
         ind = 0
         suffix = get_suffix(img_fp)
+        # if args.gbdt ==1:
+        #     suffix = suffix
+        print("save suffix:"+suffix)
         for rect in rects:
             # whether use dlib landmark to crop image, if not, use only face bbox to calc roi bbox for cropping
             if args.dlib_landmark:
@@ -101,6 +119,19 @@ def main(args):
                 if args.mode == 'gpu':
                     input = input.cuda()
                 param = model(input)
+                if args.gbdt==1:
+                    # set_trace()
+                    rawfeat = input.cpu().detach().numpy().reshape(-1)[important_rawfeature]
+                    batched_gbdt_features[0,:num_feat] = rawfeat
+                    midfeat = model.mid_features.cpu().detach().numpy().reshape(-1)[important_midfeature]
+                    batched_gbdt_features[0,num_feat:] = midfeat
+                    for d in range(target_dim):
+                        batched_gbdt_predict[0,d] = lightgbms[d].predict(batched_gbdt_features)
+                        gbdt_predict =torch.tensor(batched_gbdt_predict)
+                        if args.mode == 'gpu': gbdt_predict = gbdt_predict.cuda()
+                        param = param * (1- args.alpha) + gbdt_predict* args.alpha
+                        # output = output * (1- alpha) + torch.tensor(batched_gbdt_predict).cuda()* alpha
+                    # set_trace()
                 param = param.squeeze().cpu().numpy().flatten().astype(np.float32)
 
             # 68 pts
@@ -116,6 +147,21 @@ def main(args):
                     if args.mode == 'gpu':
                         input = input.cuda()
                     param = model(input)
+                    set_trace()
+                    if args.gbdt==1:
+                        # set_trace()
+                        rawfeat = input.cpu().detach().numpy().reshape(-1)[important_rawfeature]
+                        batched_gbdt_features[0,:num_feat] = rawfeat
+                        midfeat = model.mid_features.cpu().detach().numpy().reshape(-1)[important_midfeature]
+                        batched_gbdt_features[0,num_feat:] = midfeat
+                        for d in range(target_dim):
+                            batched_gbdt_predict[0,d] = lightgbms[d].predict(batched_gbdt_features)
+                            gbdt_predict =torch.tensor(batched_gbdt_predict)
+                            if args.mode == 'gpu': gbdt_predict = gbdt_predict.cuda()
+                            param = param * (1- args.alpha) + gbdt_predict* args.alpha
+                            # output = output * (1- alpha) + torch.tensor(batched_gbdt_predict).cuda()* alpha
+                        # set_trace()
+
                     param = param.squeeze().cpu().numpy().flatten().astype(np.float32)
 
                 pts68 = predict_68pts(param, roi_box)
@@ -174,13 +220,18 @@ def main(args):
             cv2.imwrite(wfp, pncc_feature[:, :, ::-1])  # cv2.imwrite will swap RGB -> BGR
             print('Dump to {}'.format(wfp))
         if args.dump_res:
-            draw_landmarks(img_ori, pts_res, wfp=img_fp.replace(suffix, '_3DDFA.jpg'), show_flg=args.show_flg)
+            if args.gbdt==1:
+                draw_landmarks(img_ori, pts_res, wfp=img_fp.replace(suffix, '_3DDFA_GBDT.jpg'), show_flg=args.show_flg)
+            else:
+                draw_landmarks(img_ori, pts_res, wfp=img_fp.replace(suffix, '_3DDFA.jpg'), show_flg=args.show_flg)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='3DDFA inference pipeline')
     parser.add_argument('-f', '--files', nargs='+',
                         help='image files paths fed into network, single or multiple images')
+    parser.add_argument('--gbdt', default=0, type=int)
+    parser.add_argument('--alpha', default=0.4, type=float)
     parser.add_argument('-m', '--mode', default='cpu', type=str, help='gpu or cpu mode')
     parser.add_argument('--show_flg', default='true', type=str2bool, help='whether show the visualization result')
     parser.add_argument('--bbox_init', default='one', type=str,

@@ -31,3 +31,5 @@ PAF/
 samples/*.obj
 .vscode/
 output.log
+gbdt_feature/*
+gbdt_param/*

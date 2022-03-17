@@ -21,16 +21,20 @@ from utils.io import mkdir
 from vdc_loss import VDCLoss
 from wpdc_loss import WPDCLoss
 import pickle as pkl
+from sklearn.ensemble import *
 from pdb import *
 # global args (configuration)
 args = None
 lr = None
 arch_choices = ['mobilenet_2', 'mobilenet_1', 'mobilenet_075', 'mobilenet_05', 'mobilenet_025']
 
+feat_index_filename = 'important_feature.pkl'
+gbdt_param_filename = './gbdt_param/gbdt_param'
 
 def parse_args():
     parser = argparse.ArgumentParser(description='3DMM Fitting')
     parser.add_argument('--gbdt', default=0, type=int)
+    parser.add_argument('--alpha', default=0.0, type=float)
     parser.add_argument('-j', '--workers', default=6, type=int)
     parser.add_argument('--epochs', default=40, type=int)
     parser.add_argument('--start-epoch', default=1, type=int)
@@ -156,29 +160,20 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
                          # f'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
                          f'Loss {losses.val:.4f} ({losses.avg:.4f})')
 
-def train_gbdt(train_loader, model, criterion, optimizer, epoch, args):
-
-    # if args.loss.lower() == 'vdc':
-    #     loss = criterion(output, target)
-    # elif args.loss.lower() == 'wpdc':
-    #     loss = criterion(output, target)
-    # elif args.loss.lower() == 'pdc':
-    #     loss = criterion(output, target)
-    # else:
-    #     raise Exception(f'Unknown loss {args.loss}')
+def prepare_gbdt(train_loader, model, criterion, optimizer, args):
 
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
 
-    model.train()
+    # model.train()
 
     end = time.time()
     # loader is batch style
     # for i, (input, target) in enumerate(train_loader):
 
     # build a batch of raw/mid features for GBDT training
-    batch_size= args.batch_size
+    batch_size = args.batch_size
     
     rawfeature_dim = 0
     midfeature_dim = 0
@@ -192,7 +187,9 @@ def train_gbdt(train_loader, model, criterion, optimizer, epoch, args):
         mid_features = model.module.mid_features
         midfeature_dim = mid_features.shape[1]* mid_features.shape[2] * mid_features.shape[3] 
         # set_trace()
+        del model.module.mid_features
         break
+    torch.cuda.empty_cache()
     feature_dim = rawfeature_dim + midfeature_dim
     feature_idx = 0
     batched_mid_features= np.zeros([batch_size, feature_dim])
@@ -212,7 +209,10 @@ def train_gbdt(train_loader, model, criterion, optimizer, epoch, args):
         batched_mid_features[:,:rawfeature_dim] += np.abs(grad).reshape(batch_size,-1)
         grad2 = model.module.mid_features.grad.cpu().detach().numpy()
         batched_mid_features[:,rawfeature_dim:] += np.abs(grad2).reshape(batch_size,-1)
-        if i>2:break
+        del input
+        if i>1000:break
+    del model.module.mid_features
+    torch.cuda.empty_cache()
     
     # set_trace()
     feature_importance = batched_mid_features.mean(axis=0)
@@ -222,34 +222,62 @@ def train_gbdt(train_loader, model, criterion, optimizer, epoch, args):
     # important_midfeature = important_midfeature + rawfeature_dim
     # important_rawfeature = np.argpartition(feature_importance, - num_feat)[- num_feat:]
     # important_feature= [important_rawfeature, important_midfeature]
+    print("select raw and mid feature:"+str(num_feat))
+    pkl.dump([important_rawfeature, important_midfeature, num_feat, target_dim], open(feat_index_filename,'wb'))
+
+def generate_gbdt_dataset(train_loader, model, criterion, optimizer, args):
+
+    # if args.loss.lower() == 'vdc':
+    #     loss = criterion(output, target)
+    # elif args.loss.lower() == 'wpdc':
+    #     loss = criterion(output, target)
+    # elif args.loss.lower() == 'pdc':
+    #     loss = criterion(output, target)
+    # else:
+    #     raise Exception(f'Unknown loss {args.loss}')
+
+    batch_time = AverageMeter()
+    data_time = AverageMeter()
+    losses = AverageMeter()
+
+    # model.train()
+
+    end = time.time()
+    # loader is batch style
+    # for i, (input, target) in enumerate(train_loader):
+
+    # build a batch of raw/mid features for GBDT training
+    batch_size = args.batch_size
+
+    [important_rawfeature, important_midfeature, num_feat, target_dim]=pkl.load(open(feat_index_filename,'rb'))
+
     feature_dim = important_rawfeature.shape[0] + important_midfeature.shape[0]
 
-    num_batch_feat_gbdt = 3
+    num_batch_feat_gbdt = 300
     batched_feature_sz = int(batch_size * num_batch_feat_gbdt)
     batched_mid_features = np.zeros([batched_feature_sz, feature_dim])
+    # target_dim = 62
     batched_target = np.zeros([batched_feature_sz, target_dim])
     feature_idx = 0
 
-    # model.eval()
-    model = model.cpu()
+    model.eval()
+    # model = model.cpu()
     torch.set_num_interop_threads(8)
-    model.module = model.module.cpu()
+    # model.module = model.module.cpu()
+    model = model.cuda()
     model.module.SetMidfeatureNeedGrad(False)
     fileid = 0
 
     for i, (input, target) in enumerate(train_loader):
-        set_trace()
         if(feature_idx + batch_size > batched_feature_sz):
             feature_idx = 0
-            filename = 'gbdt_feature' +str(fileid)+'.pkl'
+            filename = './gbdt_feature/gbdt_feature' +str(fileid)+'.pkl'
             fileid += 1
             pkl.dump([batched_mid_features, batched_target], open(filename,'wb'))
 
-        target = target.cpu()
-        input = input.cpu()#.cuda(non_blocking=True)
+        target = target.cuda()
+        input = input.cuda()#.cuda(non_blocking=True)
         target.requires_grad = False
-        # input.requires_grad = True
-        input = input#.cuda()
         output = model(input)
         rawfeat = input.cpu().detach().numpy().reshape(batch_size,-1)[:,important_rawfeature]
         batched_mid_features[feature_idx:feature_idx + batch_size, :num_feat] = rawfeat
@@ -257,7 +285,70 @@ def train_gbdt(train_loader, model, criterion, optimizer, epoch, args):
         batched_mid_features[feature_idx:feature_idx + batch_size, num_feat:] = midfeat
         batched_target[feature_idx:feature_idx + batch_size] = target.cpu().detach().numpy()
         feature_idx += batch_size
+        batch_time.update(time.time() - end)
+        end = time.time()
+        # log
+        if i % args.print_freq == 0:
+            logging.info(f'file id: [{fileid}][{i}/{len(train_loader)}]\t'
+                         # f'LR: {lr:8f}\t'
+                         f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                         # f'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
+                         # f'Loss {losses.val:.4f} ({losses.avg:.4f})'
+                         )
+        del input
+        del model.module.mid_features
+
+
+def train_gbdt(train_loader, model, criterion, optimizer, args):
+
+    batch_time = AverageMeter()
+    data_time = AverageMeter()
+    losses = AverageMeter()
+    end = time.time()
+
+    # build a batch of raw/mid features for GBDT training
+    fileid = 0
+    filename = './gbdt_feature/gbdt_feature' +str(fileid)+'.pkl'
     
+    [batched_mid_features, batched_target] = pkl.load(open(filename,'rb'))
+    print(batched_mid_features[:3,:3])
+    
+    lightgbms = []
+    target_dim = batched_target.shape[1]
+    num_init_trees = 30
+    for i in range(target_dim):
+        print("training gbdt for target dim:"+str(i))
+        lightgbm = HistGradientBoostingRegressor(max_iter=num_init_trees, max_leaf_nodes=31, warm_start = True)
+        # lightgbm = GradientBoostingRegressor(n_estimators=20, max_depth=6)
+        lightgbm.fit(batched_mid_features, batched_target[:,i])
+        pkl.dump(lightgbm, open(gbdt_param_filename+str(i)+'.pkl','wb'))
+        # lightgbms.append(lightgbm)
+
+def refine_gbdt(train_loader, model, criterion, optimizer, args):
+    # fileid += 1
+    # pkl.dump(lightgbms, open(gbdt_param_filename,'wb'))
+    lightgbms = []
+    target_dim = 62
+    for i in range(target_dim):
+        lightgbm = pkl.load(open(gbdt_param_filename+str(i)+'.pkl','rb'))
+        lightgbms.append(lightgbm)
+
+    # target_dim = 0
+    num_pkl_files = 10
+    for fileid in range(1, num_pkl_files):
+        filename = './gbdt_feature/gbdt_feature' +str(fileid)+'.pkl'
+        print("refine gbdt on feature:"+filename)
+        [batched_mid_features, batched_target] = pkl.load(open(filename,'rb'))
+        set_trace()
+        for i in range(target_dim):
+            lightgbms[i].n_iter_ += 2
+            lightgbms[i].fit(batched_mid_features, batched_target[:,i])
+    
+    for i in range(target_dim):
+        
+        pkl.dump(lightgbm, open(gbdt_param_filename + '_ref'+str(i)+'.pkl','wb'))
+    print("saved gbdt after refinement.")
+
 
     # # model.eval()
     # for i, (input, target) in enumerate(train_loader):
@@ -292,9 +383,9 @@ def train_gbdt(train_loader, model, criterion, optimizer, epoch, args):
     #                      # f'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
     #                      f'Loss {losses.val:.4f} ({losses.avg:.4f})')
 
+max_batches_for_eval = 1500
 
-
-def validate(val_loader, model, criterion, epoch):
+def validate(val_loader, model, criterion, epoch, args):
     model.eval()
 
     end = time.time()
@@ -308,12 +399,59 @@ def validate(val_loader, model, criterion, epoch):
 
             loss = criterion(output, target)
             losses.append(loss.item())
+            # if i> max_batches_for_eval: break
 
         elapse = time.time() - end
         loss = np.mean(losses)
         logging.info(f'Val: [{epoch}][{len(val_loader)}]\t'
                      f'Loss {loss:.4f}\t'
                      f'Time {elapse:.3f}')
+
+def validate_gbdt(val_loader, model, criterion, args):
+    
+    alpha = args.alpha
+
+    [important_rawfeature, important_midfeature, num_feat, target_dim]=pkl.load(open(feat_index_filename,'rb'))
+    lightgbms = []
+    for i in range(target_dim):
+        lightgbm = pkl.load(open(gbdt_param_filename + str(i) + '.pkl','rb'))
+        lightgbms.append(lightgbm)
+
+    batch_size = args.val_batch_size
+    feature_dim = important_rawfeature.shape[0] + important_midfeature.shape[0]
+    num_batch_for_eval = 100
+    batched_gbdt_features = np.zeros([batch_size, feature_dim])
+    batched_gbdt_predict = np.zeros([batch_size, target_dim])
+    model.module.SetMidfeatureNeedGrad(False)
+    model.eval()
+
+    end = time.time()
+    with torch.no_grad():
+        losses = []
+        for i, (input, target) in enumerate(val_loader):
+            # compute output
+            target.requires_grad = False
+            target = target.cuda(non_blocking=True)
+            output = model(input)
+            batch_size = target.shape[0]
+            rawfeat = input.cpu().detach().numpy().reshape(batch_size,-1)[:,important_rawfeature]
+            batched_gbdt_features[:,:num_feat] = rawfeat
+            midfeat = model.module.mid_features.cpu().detach().numpy().reshape(batch_size,-1)[:,important_midfeature]
+            batched_gbdt_features[:, num_feat:] = midfeat
+            for d in range(target_dim):
+                batched_gbdt_predict[:,d] = lightgbms[d].predict(batched_gbdt_features)
+            output = output * (1- alpha) + torch.tensor(batched_gbdt_predict).cuda()* alpha
+            loss = criterion(output, target)
+            losses.append(loss.item())
+            # if i> max_batches_for_eval: break
+            # if i % args.print_freq==0:print("validate gbdt for:"+str(i))
+
+        elapse = time.time() - end
+        loss = np.mean(losses)
+        logging.info(f'alpha[{alpha}] Val: [{len(val_loader)}]\t'
+                     f'Loss {loss:.4f}\t'
+                     f'Time {elapse:.3f}')
+
 
 
 def main():
@@ -389,7 +527,7 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.workers,
                               shuffle=True, pin_memory=True, drop_last=True)
     val_loader = DataLoader(val_dataset, batch_size=args.val_batch_size, num_workers=args.workers,
-                            shuffle=False, pin_memory=True)
+                            shuffle=False, pin_memory=True, drop_last=True)
 
     # step4: run
     cudnn.benchmark = True
@@ -399,12 +537,25 @@ def main():
 
     # set_trace()
     if args.gbdt==1:
+        # prepare_gbdt(train_loader, model, criterion, optimizer, args)
+        # generate_gbdt_dataset(train_loader, model, criterion, optimizer, args)
+        # train_gbdt(train_loader, model, criterion, optimizer, args)
+        # refine_gbdt(train_loader, model, criterion, optimizer, args)
         for epoch in range(args.start_epoch, args.epochs + 1):
             # adjust learning rate
             adjust_learning_rate(optimizer, epoch, args.milestones)
 
             # train for one epoch
-            train_gbdt(train_loader, model, criterion, optimizer, epoch, args)
+        
+        base_alpha = 0.1
+        validate_gbdt(val_loader, model, criterion, args)
+        print("with original model:")
+        validate(val_loader, model, criterion, epoch, args)
+        for epoch in range(0,4):
+            args.alpha += base_alpha
+            print("with gbdt model of alpha:"+str(args.alpha))
+            validate_gbdt(val_loader, model, criterion, args)
+
 
     else:
         for epoch in range(args.start_epoch, args.epochs + 1):
@@ -412,7 +563,7 @@ def main():
             adjust_learning_rate(optimizer, epoch, args.milestones)
 
             # train for one epoch
-            train_gbdt(train_loader, model, criterion, optimizer, epoch, args)
+            train(train_loader, model, criterion, optimizer, epoch, args)
             filename = f'{args.snapshot}_checkpoint_epoch_{epoch}.pth.tar'
             save_checkpoint(
                 {

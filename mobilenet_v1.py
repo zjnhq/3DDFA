@@ -115,7 +115,7 @@ class MobileNet(nn.Module):
         if self.midfeature_grad:
             self.mid_features.retain_grad()
         else:
-            self.mid_features.detach()
+            self.mid_features.clone().detach()
         x2 = self.dw6(self.mid_features)
 
         x2 = self.avgpool(x2)
