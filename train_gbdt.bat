@@ -1,7 +1,7 @@
 python train.py --arch="mobilenet_1" ^
     --start-epoch=1 ^
     --gbdt=1 ^
-    --alpha=0.2 ^
+    --alpha=0.4 ^
     --loss=wpdc ^
     --snapshot="snapshot/phase1_wpdc" ^
     --param-fp-train='D:/data/facealignment/train.configs/param_all_norm.pkl' ^

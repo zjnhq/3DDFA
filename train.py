@@ -383,7 +383,7 @@ def refine_gbdt(train_loader, model, criterion, optimizer, args):
     #                      # f'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
     #                      f'Loss {losses.val:.4f} ({losses.avg:.4f})')
 
-max_batches_for_eval = 1500
+max_batches_for_eval = 450
 
 def validate(val_loader, model, criterion, epoch, args):
     model.eval()
@@ -407,50 +407,122 @@ def validate(val_loader, model, criterion, epoch, args):
                      f'Loss {loss:.4f}\t'
                      f'Time {elapse:.3f}')
 
+class GBDT_Predictor:
+    def __init__(self, feat_index_filename, gbdt_param_filename):
+        [self.rawfeature_index, self.midfeature_index, self.num_feat, self.target_dim] = pkl.load(open(feat_index_filename,'rb'))
+        batch_size = 32
+        self.feature_dim = self.rawfeature_index.shape[0] + self.midfeature_index.shape[0]
+        self.batched_gbdt_features = np.zeros([batch_size, self.feature_dim])
+        self.batched_gbdt_predict = np.zeros([batch_size, self.target_dim])
+        if self.num_feat != self.rawfeature_index.shape[0]:
+            print('num_feat != self.rawfeature_index.shape[0] ')
+        self.lightgbms = []
+        for i in range(self.target_dim):
+            self.lightgbm = pkl.load(open(gbdt_param_filename + str(i) + '.pkl','rb'))
+            self.lightgbms.append(self.lightgbm)
+    def predict(self,input, mid_features):
+        batch_size = input.shape[0]
+        if batch_size != self.batched_gbdt_features.shape[0]:
+            self.batched_gbdt_features = np.zeros([batch_size, self.feature_dim])
+            self.batched_gbdt_predict = np.zeros([batch_size, self.target_dim])
+        rawfeat = input.cpu().detach().numpy().reshape(batch_size,-1)[:,self.rawfeature_index]
+        
+        self.batched_gbdt_features[:,:self.num_feat] = rawfeat
+        midfeat = mid_features.cpu().detach().numpy().reshape(batch_size,-1)[:,self.midfeature_index]
+        self.batched_gbdt_features[:, self.num_feat:] = midfeat
+        for d in range(self.target_dim):
+            self.batched_gbdt_predict[:,d] = self.lightgbms[d].predict(self.batched_gbdt_features)
+        # output = output * (1- alpha) + torch.tensor(batched_gbdt_predict).cuda()* alpha
+        return torch.tensor(self.batched_gbdt_predict).cuda()
+
 def validate_gbdt(val_loader, model, criterion, args):
     
     alpha = args.alpha
-
-    [important_rawfeature, important_midfeature, num_feat, target_dim]=pkl.load(open(feat_index_filename,'rb'))
-    lightgbms = []
-    for i in range(target_dim):
-        lightgbm = pkl.load(open(gbdt_param_filename + str(i) + '.pkl','rb'))
-        lightgbms.append(lightgbm)
-
+    gbdt = GBDT_Predictor(feat_index_filename, gbdt_param_filename)
+    # [important_rawfeature, important_midfeature, num_feat, target_dim] = pkl.load(open(feat_index_filename,'rb'))
+    # lightgbms = []
+    # for i in range(target_dim):
+    #     lightgbm = pkl.load(open(gbdt_param_filename + str(i) + '.pkl','rb'))
+    #     lightgbms.append(lightgbm)
     batch_size = args.val_batch_size
-    feature_dim = important_rawfeature.shape[0] + important_midfeature.shape[0]
+    
     num_batch_for_eval = 100
-    batched_gbdt_features = np.zeros([batch_size, feature_dim])
-    batched_gbdt_predict = np.zeros([batch_size, target_dim])
+    
     model.module.SetMidfeatureNeedGrad(False)
     model.eval()
 
     end = time.time()
-    with torch.no_grad():
-        losses = []
-        for i, (input, target) in enumerate(val_loader):
-            # compute output
-            target.requires_grad = False
-            target = target.cuda(non_blocking=True)
-            output = model(input)
-            batch_size = target.shape[0]
-            rawfeat = input.cpu().detach().numpy().reshape(batch_size,-1)[:,important_rawfeature]
-            batched_gbdt_features[:,:num_feat] = rawfeat
-            midfeat = model.module.mid_features.cpu().detach().numpy().reshape(batch_size,-1)[:,important_midfeature]
-            batched_gbdt_features[:, num_feat:] = midfeat
-            for d in range(target_dim):
-                batched_gbdt_predict[:,d] = lightgbms[d].predict(batched_gbdt_features)
-            output = output * (1- alpha) + torch.tensor(batched_gbdt_predict).cuda()* alpha
-            loss = criterion(output, target)
-            losses.append(loss.item())
-            # if i> max_batches_for_eval: break
-            # if i % args.print_freq==0:print("validate gbdt for:"+str(i))
+    # with torch.no_grad():
+    losses_cnn_original = []
+    losses_cnn_attacked = []
+    losses_gbdt_original = []
+    losses_gbdt_attacked = []
+    use_adattack = 1
+    if use_adattack ==0:
+        losses_cnn_attacked.append(0.0)
+        losses_gbdt_attacked.append(0.0)
+    if use_adattack==1:
+        model.train()
+        model.module.SetMidfeatureNeedGrad(True)
+    for i, (input, target) in enumerate(val_loader):
+        # compute output
+        target.requires_grad = False
+        target = target.cuda(non_blocking=True)
+        if use_adattack==1:input.requires_grad = True
+        output = model(input)
+        # batch_size = target.shape[0]
+        # rawfeat = input.cpu().detach().numpy().reshape(batch_size,-1)[:,important_rawfeature]
+        # batched_gbdt_features[:,:num_feat] = rawfeat
+        # midfeat = model.module.mid_features.cpu().detach().numpy().reshape(batch_size,-1)[:,important_midfeature]
+        # batched_gbdt_features[:, num_feat:] = midfeat
+        # for d in range(target_dim):
+        #     batched_gbdt_predict[:,d] = lightgbms[d].predict(batched_gbdt_features)
+        gbdt_output = gbdt.predict(input, model.module.mid_features)
+        gbdt_output = output * (1- alpha) + gbdt_output* alpha
+        
+        loss = criterion(gbdt_output, target)
+        losses_gbdt_original.append(loss.item())
 
-        elapse = time.time() - end
-        loss = np.mean(losses)
-        logging.info(f'alpha[{alpha}] Val: [{len(val_loader)}]\t'
-                     f'Loss {loss:.4f}\t'
-                     f'Time {elapse:.3f}')
+        loss = criterion(output, target)
+        losses_cnn_original.append(loss.item())
+
+        if use_adattack==1:
+            input_original = input.clone().detach()
+            attack_maxstepsize = 0.01#np.abs(input_original.cpu().numpy()).mean()*0.02
+            input_upper_limit= input_original + attack_maxstepsize
+            input_lower_limit = input_original - attack_maxstepsize
+            attack_stepsize = 100000.0
+            input.retain_grad()
+            for attack_iter in range(10):
+                loss = criterion(output, target)
+                loss.backward()
+                # set_trace()
+                # input.abs().mean()/(input.grad.abs().mean())
+                input.detach()
+                input.data = input.data + input.grad * attack_stepsize
+                input.data[input.data>input_upper_limit] = input_upper_limit.data[input.data>input_upper_limit]
+                input.data[input.data<input_lower_limit] = input_lower_limit.data[input.data<input_lower_limit]
+                input.requires_grad= True
+                input.retain_grad()
+                output = model(input)    
+            gbdt_output = gbdt.predict(input, model.module.mid_features)
+            gbdt_output = output * (1- alpha) + gbdt_output * alpha    
+            loss = criterion(output, target)
+            losses_cnn_attacked.append(loss.item())
+            loss = criterion(gbdt_output, target)
+            losses_gbdt_attacked.append(loss.item())
+
+        # if i> max_batches_for_eval: break
+        # if i % args.print_freq==0:
+        #     print("validate gbdt for:"+str(i))
+    elapse = time.time() - end
+    # loss = np.mean(losses)
+    logging.info(f'alpha[{alpha}] Val: [{i} /{len(val_loader)}]\t'
+                 f'CNN Loss original {np.mean(losses_cnn_original)*100:.4f}\t'
+                 f'CNN Loss attacked {np.mean(losses_cnn_attacked)*100:.4f}\t'
+                 f'GBDT Loss original {np.mean(losses_gbdt_original)*100:.4f}\t'
+                 f'GBDT Loss attacked {np.mean(losses_gbdt_attacked)*100:.4f}\t'
+                 f'Time {elapse:.3f}')
 
 
 
@@ -550,7 +622,7 @@ def main():
         base_alpha = 0.1
         validate_gbdt(val_loader, model, criterion, args)
         print("with original model:")
-        validate(val_loader, model, criterion, epoch, args)
+        # validate(val_loader, model, criterion, epoch, args)
         for epoch in range(0,4):
             args.alpha += base_alpha
             print("with gbdt model of alpha:"+str(args.alpha))
