@@ -21,7 +21,9 @@ from utils.io import mkdir
 from vdc_loss import VDCLoss
 from wpdc_loss import WPDCLoss
 import pickle as pkl
-from sklearn.ensemble import *
+import sys
+# print(sys.path.append('D:/code/forest/scikit-learn'))
+from gradient_boosting import HistGradientBoostingRegressor
 from pdb import *
 # global args (configuration)
 args = None
@@ -253,7 +255,7 @@ def generate_gbdt_dataset(train_loader, model, criterion, optimizer, args):
 
     feature_dim = important_rawfeature.shape[0] + important_midfeature.shape[0]
 
-    num_batch_feat_gbdt = 300
+    num_batch_feat_gbdt = 1000
     batched_feature_sz = int(batch_size * num_batch_feat_gbdt)
     batched_mid_features = np.zeros([batched_feature_sz, feature_dim])
     # target_dim = 62
@@ -274,6 +276,8 @@ def generate_gbdt_dataset(train_loader, model, criterion, optimizer, args):
             filename = './gbdt_feature/gbdt_feature' +str(fileid)+'.pkl'
             fileid += 1
             pkl.dump([batched_mid_features, batched_target], open(filename,'wb'))
+            if fileid>10:
+                break
 
         target = target.cuda()
         input = input.cuda()#.cuda(non_blocking=True)
@@ -298,7 +302,10 @@ def generate_gbdt_dataset(train_loader, model, criterion, optimizer, args):
         del input
         del model.module.mid_features
 
-
+num_init_trees = 3
+num_pkl_files = 10
+num_tree_increase = 3 
+# target_dim = 1
 def train_gbdt(train_loader, model, criterion, optimizer, args):
 
     batch_time = AverageMeter()
@@ -314,8 +321,8 @@ def train_gbdt(train_loader, model, criterion, optimizer, args):
     print(batched_mid_features[:3,:3])
     
     lightgbms = []
-    target_dim = batched_target.shape[1]
-    num_init_trees = 30
+    target_dim = 2#batched_target.shape[1]
+    
     for i in range(target_dim):
         print("training gbdt for target dim:"+str(i))
         lightgbm = HistGradientBoostingRegressor(max_iter=num_init_trees, max_leaf_nodes=31, warm_start = True)
@@ -328,25 +335,32 @@ def refine_gbdt(train_loader, model, criterion, optimizer, args):
     # fileid += 1
     # pkl.dump(lightgbms, open(gbdt_param_filename,'wb'))
     lightgbms = []
-    target_dim = 62
+    target_dim = 2#62
     for i in range(target_dim):
         lightgbm = pkl.load(open(gbdt_param_filename+str(i)+'.pkl','rb'))
         lightgbms.append(lightgbm)
 
+    print("original LightGBM paramers:")
+    print(lightgbms[0].get_params())
     # target_dim = 0
-    num_pkl_files = 10
+    
     for fileid in range(1, num_pkl_files):
         filename = './gbdt_feature/gbdt_feature' +str(fileid)+'.pkl'
         print("refine gbdt on feature:"+filename)
         [batched_mid_features, batched_target] = pkl.load(open(filename,'rb'))
         set_trace()
         for i in range(target_dim):
-            lightgbms[i].n_iter_ += 2
+            params = lightgbms[i].get_params()
+            params['max_iter'] = params['max_iter'] + num_tree_increase # for every batch data, increase 2 trees
+            params['warm_start'] = True 
+            lightgbms[i].set_params(params)
             lightgbms[i].fit(batched_mid_features, batched_target[:,i])
     
     for i in range(target_dim):
         
-        pkl.dump(lightgbm, open(gbdt_param_filename + '_ref'+str(i)+'.pkl','wb'))
+        pkl.dump(lightgbms[i], open(gbdt_param_filename + '_ref'+str(i)+'.pkl','wb'))
+    print("refined LightGBM paramers:")
+    print(lightgbms[0].get_params())
     print("saved gbdt after refinement.")
 
 
@@ -418,8 +432,9 @@ class GBDT_Predictor:
             print('num_feat != self.rawfeature_index.shape[0] ')
         self.lightgbms = []
         for i in range(self.target_dim):
-            self.lightgbm = pkl.load(open(gbdt_param_filename + str(i) + '.pkl','rb'))
+            self.lightgbm = pkl.load(open(gbdt_param_filename+ '_ref' + str(i) + '.pkl','rb'))
             self.lightgbms.append(self.lightgbm)
+            set_trace()
     def predict(self,input, mid_features):
         batch_size = input.shape[0]
         if batch_size != self.batched_gbdt_features.shape[0]:
@@ -611,8 +626,8 @@ def main():
     if args.gbdt==1:
         # prepare_gbdt(train_loader, model, criterion, optimizer, args)
         # generate_gbdt_dataset(train_loader, model, criterion, optimizer, args)
-        # train_gbdt(train_loader, model, criterion, optimizer, args)
-        # refine_gbdt(train_loader, model, criterion, optimizer, args)
+        train_gbdt(train_loader, model, criterion, optimizer, args)
+        refine_gbdt(train_loader, model, criterion, optimizer, args)
         for epoch in range(args.start_epoch, args.epochs + 1):
             # adjust learning rate
             adjust_learning_rate(optimizer, epoch, args.milestones)
