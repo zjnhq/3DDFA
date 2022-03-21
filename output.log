@@ -1,36 +1,70 @@
-[2022-03-16 20:21:02,213] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] gbdt: 1
-[2022-03-16 20:21:02,213] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] alpha: 0.7
-[2022-03-16 20:21:02,215] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] workers: 8
-[2022-03-16 20:21:02,215] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] epochs: 1
-[2022-03-16 20:21:02,216] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] start_epoch: 1
-[2022-03-16 20:21:02,217] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] batch_size: 32
-[2022-03-16 20:21:02,217] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] val_batch_size: 32
-[2022-03-16 20:21:02,218] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] base_lr: 0.02
-[2022-03-16 20:21:02,218] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] momentum: 0.9
-[2022-03-16 20:21:02,219] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] weight_decay: 0.0005
-[2022-03-16 20:21:02,220] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] print_freq: 50
-[2022-03-16 20:21:02,221] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] resume: 
-[2022-03-16 20:21:02,222] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] devices_id: [0]
-[2022-03-16 20:21:02,223] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] filelists_train: D:/data/facealignment/train.configs/train_aug_120x120.list.train
-[2022-03-16 20:21:02,223] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] filelists_val: D:/data/facealignment/train.configs/train_aug_120x120.list.val
-[2022-03-16 20:21:02,224] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] root: D:\data\facealignment\train_aug_120x120
-[2022-03-16 20:21:02,225] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] snapshot: snapshot/phase1_wpdc
-[2022-03-16 20:21:02,225] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] log_file: output.log
-[2022-03-16 20:21:02,226] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] log_mode: w
-[2022-03-16 20:21:02,226] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] size_average: True
-[2022-03-16 20:21:02,227] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] num_classes: 62
-[2022-03-16 20:21:02,228] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] arch: mobilenet_1
-[2022-03-16 20:21:02,229] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] frozen: False
-[2022-03-16 20:21:02,229] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] milestones: [30, 40]
-[2022-03-16 20:21:02,230] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] task: all
-[2022-03-16 20:21:02,230] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] test_initial: False
-[2022-03-16 20:21:02,231] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] warmup: 5
-[2022-03-16 20:21:02,232] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] param_fp_train: 'D:/data/facealignment/train.configs/param_all_norm.pkl'
-[2022-03-16 20:21:02,232] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] param_fp_val: 'D:/data/facealignment/train.configs/param_all_norm_val.pkl'
-[2022-03-16 20:21:02,233] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] opt_style: resample
-[2022-03-16 20:21:02,234] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] resample_num: 132
-[2022-03-16 20:21:02,234] [p39776] [D:\code\face\3DDFA\train.py:90] [INFO] loss: wpdc
-[2022-03-16 20:21:02,387] [p39776] [D:\code\face\3DDFA\train.py:484] [INFO] Use WPDC Loss
-[2022-03-16 20:25:57,768] [p39776] [D:\code\face\3DDFA\train.py:451] [INFO] alpha[0.7] Val: [1612]	Loss 0.1414	Time 293.792
-[2022-03-16 20:28:49,246] [p39776] [D:\code\face\3DDFA\train.py:406] [INFO] Val: [1][1612]	Loss 0.1346	Time 171.224
-[2022-03-16 20:33:38,242] [p39776] [D:\code\face\3DDFA\train.py:451] [INFO] alpha[0.7999999999999999] Val: [1612]	Loss 0.1441	Time 287.378
+[2022-03-21 01:04:42,509] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] gbdt: 1
+[2022-03-21 01:04:42,512] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] alpha: 0.6
+[2022-03-21 01:04:42,513] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] workers: 8
+[2022-03-21 01:04:42,524] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] epochs: 1
+[2022-03-21 01:04:42,525] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] start_epoch: 1
+[2022-03-21 01:04:42,542] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] batch_size: 32
+[2022-03-21 01:04:42,544] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] val_batch_size: 32
+[2022-03-21 01:04:42,544] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] base_lr: 0.02
+[2022-03-21 01:04:42,544] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] momentum: 0.9
+[2022-03-21 01:04:42,544] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] weight_decay: 0.0005
+[2022-03-21 01:04:42,544] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] print_freq: 100
+[2022-03-21 01:04:42,545] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] resume: models/phase1_wpdc.pth.tar
+[2022-03-21 01:04:42,545] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] devices_id: [0]
+[2022-03-21 01:04:42,545] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] filelists_train: D:/data/facealignment/train.configs/train_aug_120x120.list.train
+[2022-03-21 01:04:42,545] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] filelists_val: D:/data/facealignment/train.configs/train_aug_120x120.list.val
+[2022-03-21 01:04:42,545] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] root: D:\data\facealignment\train_aug_120x120
+[2022-03-21 01:04:42,545] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] snapshot: snapshot/phase1_wpdc
+[2022-03-21 01:04:42,545] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] log_file: output.log
+[2022-03-21 01:04:42,545] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] log_mode: w
+[2022-03-21 01:04:42,545] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] size_average: True
+[2022-03-21 01:04:42,546] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] num_classes: 62
+[2022-03-21 01:04:42,546] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] arch: mobilenet_1
+[2022-03-21 01:04:42,546] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] frozen: False
+[2022-03-21 01:04:42,547] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] milestones: [30, 40]
+[2022-03-21 01:04:42,559] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] task: all
+[2022-03-21 01:04:42,577] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] test_initial: False
+[2022-03-21 01:04:42,578] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] warmup: 5
+[2022-03-21 01:04:42,579] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] param_fp_train: 'D:/data/facealignment/train.configs/param_all_norm.pkl'
+[2022-03-21 01:04:42,580] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] param_fp_val: 'D:/data/facealignment/train.configs/param_all_norm_val.pkl'
+[2022-03-21 01:04:42,581] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] opt_style: resample
+[2022-03-21 01:04:42,582] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] resample_num: 132
+[2022-03-21 01:04:42,583] [p30876] [D:\code\face\3DDFA\train.py:92] [INFO] loss: wpdc
+[2022-03-21 01:04:42,805] [p30876] [D:\code\face\3DDFA\train.py:593] [INFO] Use WPDC Loss
+[2022-03-21 01:04:42,806] [p30876] [D:\code\face\3DDFA\train.py:611] [INFO] => loading checkpoint models/phase1_wpdc.pth.tar
+[2022-03-21 01:05:30,081] [p30876] [D:\code\face\3DDFA\train.py:551] [INFO] alpha[0.6] Time 0.774 Val: [0 /1612]	CNN Loss original 3.8771	CNN Loss attacked 7.5317	
+[2022-03-21 01:05:30,082] [p30876] [D:\code\face\3DDFA\train.py:554] [INFO] GBDT Loss original 2.5426	GBDT Loss attacked 4.5920	
+[2022-03-21 01:13:25,731] [p30876] [D:\code\face\3DDFA\train.py:551] [INFO] alpha[0.6] Time 8.702 Val: [100 /1612]	CNN Loss original 4.5327	CNN Loss attacked 8.4232	
+[2022-03-21 01:13:25,732] [p30876] [D:\code\face\3DDFA\train.py:554] [INFO] GBDT Loss original 3.8636	GBDT Loss attacked 5.9597	
+[2022-03-21 01:21:35,660] [p30876] [D:\code\face\3DDFA\train.py:551] [INFO] alpha[0.6] Time 16.867 Val: [200 /1612]	CNN Loss original 4.5121	CNN Loss attacked 8.2128	
+[2022-03-21 01:21:35,660] [p30876] [D:\code\face\3DDFA\train.py:554] [INFO] GBDT Loss original 3.7661	GBDT Loss attacked 5.6653	
+[2022-03-21 01:27:58,972] [p30876] [D:\code\face\3DDFA\train.py:551] [INFO] alpha[0.6] Time 23.256 Val: [300 /1612]	CNN Loss original 4.6463	CNN Loss attacked 8.5499	
+[2022-03-21 01:27:58,972] [p30876] [D:\code\face\3DDFA\train.py:554] [INFO] GBDT Loss original 3.9610	GBDT Loss attacked 6.0713	
+[2022-03-21 01:34:40,777] [p30876] [D:\code\face\3DDFA\train.py:551] [INFO] alpha[0.6] Time 29.952 Val: [400 /1612]	CNN Loss original 4.8871	CNN Loss attacked 8.6536	
+[2022-03-21 01:34:40,779] [p30876] [D:\code\face\3DDFA\train.py:554] [INFO] GBDT Loss original 4.2082	GBDT Loss attacked 6.2223	
+[2022-03-21 01:40:55,171] [p30876] [D:\code\face\3DDFA\train.py:551] [INFO] alpha[0.6] Time 36.192 Val: [500 /1612]	CNN Loss original 5.4466	CNN Loss attacked 9.5771	
+[2022-03-21 01:40:55,172] [p30876] [D:\code\face\3DDFA\train.py:554] [INFO] GBDT Loss original 4.7904	GBDT Loss attacked 7.0981	
+[2022-03-21 01:46:55,375] [p30876] [D:\code\face\3DDFA\train.py:551] [INFO] alpha[0.6] Time 42.196 Val: [600 /1612]	CNN Loss original 5.2432	CNN Loss attacked 9.2510	
+[2022-03-21 01:46:55,375] [p30876] [D:\code\face\3DDFA\train.py:554] [INFO] GBDT Loss original 4.5689	GBDT Loss attacked 6.7733	
+[2022-03-21 01:52:53,136] [p30876] [D:\code\face\3DDFA\train.py:551] [INFO] alpha[0.6] Time 48.158 Val: [700 /1612]	CNN Loss original 5.3882	CNN Loss attacked 9.4135	
+[2022-03-21 01:52:53,136] [p30876] [D:\code\face\3DDFA\train.py:554] [INFO] GBDT Loss original 4.7520	GBDT Loss attacked 6.9707	
+[2022-03-21 01:58:57,482] [p30876] [D:\code\face\3DDFA\train.py:551] [INFO] alpha[0.6] Time 54.231 Val: [800 /1612]	CNN Loss original 5.2969	CNN Loss attacked 9.2802	
+[2022-03-21 01:58:57,482] [p30876] [D:\code\face\3DDFA\train.py:554] [INFO] GBDT Loss original 4.6722	GBDT Loss attacked 6.8746	
+[2022-03-21 02:05:00,242] [p30876] [D:\code\face\3DDFA\train.py:551] [INFO] alpha[0.6] Time 60.277 Val: [900 /1612]	CNN Loss original 5.2348	CNN Loss attacked 9.2092	
+[2022-03-21 02:05:00,242] [p30876] [D:\code\face\3DDFA\train.py:554] [INFO] GBDT Loss original 4.6130	GBDT Loss attacked 6.8065	
+[2022-03-21 02:11:02,038] [p30876] [D:\code\face\3DDFA\train.py:551] [INFO] alpha[0.6] Time 66.307 Val: [1000 /1612]	CNN Loss original 5.3614	CNN Loss attacked 9.3083	
+[2022-03-21 02:11:02,039] [p30876] [D:\code\face\3DDFA\train.py:554] [INFO] GBDT Loss original 4.7202	GBDT Loss attacked 6.8971	
+[2022-03-21 02:17:06,193] [p30876] [D:\code\face\3DDFA\train.py:551] [INFO] alpha[0.6] Time 72.376 Val: [1100 /1612]	CNN Loss original 5.3076	CNN Loss attacked 9.2302	
+[2022-03-21 02:17:06,194] [p30876] [D:\code\face\3DDFA\train.py:554] [INFO] GBDT Loss original 4.6814	GBDT Loss attacked 6.8401	
+[2022-03-21 02:23:08,315] [p30876] [D:\code\face\3DDFA\train.py:551] [INFO] alpha[0.6] Time 78.411 Val: [1200 /1612]	CNN Loss original 5.4720	CNN Loss attacked 9.4073	
+[2022-03-21 02:23:08,316] [p30876] [D:\code\face\3DDFA\train.py:554] [INFO] GBDT Loss original 4.8552	GBDT Loss attacked 7.0407	
+[2022-03-21 02:29:10,248] [p30876] [D:\code\face\3DDFA\train.py:551] [INFO] alpha[0.6] Time 84.443 Val: [1300 /1612]	CNN Loss original 5.4833	CNN Loss attacked 9.4151	
+[2022-03-21 02:29:10,249] [p30876] [D:\code\face\3DDFA\train.py:554] [INFO] GBDT Loss original 4.8739	GBDT Loss attacked 7.0591	
+[2022-03-21 02:35:12,156] [p30876] [D:\code\face\3DDFA\train.py:551] [INFO] alpha[0.6] Time 90.475 Val: [1400 /1612]	CNN Loss original 5.4971	CNN Loss attacked 9.4298	
+[2022-03-21 02:35:12,157] [p30876] [D:\code\face\3DDFA\train.py:554] [INFO] GBDT Loss original 4.8942	GBDT Loss attacked 7.0778	
+[2022-03-21 02:41:27,392] [p30876] [D:\code\face\3DDFA\train.py:551] [INFO] alpha[0.6] Time 96.729 Val: [1500 /1612]	CNN Loss original 5.5313	CNN Loss attacked 9.5308	
+[2022-03-21 02:41:27,393] [p30876] [D:\code\face\3DDFA\train.py:554] [INFO] GBDT Loss original 4.9343	GBDT Loss attacked 7.1533	
+[2022-03-21 02:48:12,605] [p30876] [D:\code\face\3DDFA\train.py:551] [INFO] alpha[0.6] Time 103.483 Val: [1600 /1612]	CNN Loss original 5.6574	CNN Loss attacked 9.7174	
+[2022-03-21 02:48:12,606] [p30876] [D:\code\face\3DDFA\train.py:554] [INFO] GBDT Loss original 5.0829	GBDT Loss attacked 7.3429	
+[2022-03-21 02:49:09,547] [p30876] [D:\code\face\3DDFA\train.py:558] [INFO] alpha[0.6] Time 104.432 Val: [1611 /1612]	CNN Loss original 5.6847	CNN Loss attacked 9.7518	
+[2022-03-21 02:49:09,548] [p30876] [D:\code\face\3DDFA\train.py:561] [INFO] GBDT Loss original 5.1057	GBDT Loss attacked 7.3706	

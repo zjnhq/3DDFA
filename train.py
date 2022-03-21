@@ -302,9 +302,9 @@ def generate_gbdt_dataset(train_loader, model, criterion, optimizer, args):
         del input
         del model.module.mid_features
 
-num_init_trees = 3
-num_pkl_files = 10
-num_tree_increase = 3 
+num_init_trees = 30
+num_pkl_files = 2
+num_tree_increase = num_init_trees#3 
 # target_dim = 1
 def train_gbdt(train_loader, model, criterion, optimizer, args):
 
@@ -318,24 +318,28 @@ def train_gbdt(train_loader, model, criterion, optimizer, args):
     filename = './gbdt_feature/gbdt_feature' +str(fileid)+'.pkl'
     
     [batched_mid_features, batched_target] = pkl.load(open(filename,'rb'))
-    print(batched_mid_features[:3,:3])
+    # print(batched_mid_features[:3,:3])
     
     lightgbms = []
-    target_dim = 2#batched_target.shape[1]
-    
+    target_dim = batched_target.shape[1]
+    max_leaf_nodes = 31
+    max_bins = 31
+    end =  time.time()
     for i in range(target_dim):
-        print("training gbdt for target dim:"+str(i))
-        lightgbm = HistGradientBoostingRegressor(max_iter=num_init_trees, max_leaf_nodes=31, warm_start = True)
+        # print("training gbdt for target dim:"+str(i))
+        lightgbm = HistGradientBoostingRegressor(max_iter=num_init_trees, max_leaf_nodes=max_leaf_nodes, max_bins=max_bins, warm_start = False)
         # lightgbm = GradientBoostingRegressor(n_estimators=20, max_depth=6)
         lightgbm.fit(batched_mid_features, batched_target[:,i])
         pkl.dump(lightgbm, open(gbdt_param_filename+str(i)+'.pkl','wb'))
-        # lightgbms.append(lightgbm)
+        lightgbms.append(lightgbm)
+        elapse = time.time() - end
+        logging.info(f'trained gbdt for target dim: [{i}][ time:{elapse/60}:.2f]\t')
 
 def refine_gbdt(train_loader, model, criterion, optimizer, args):
-    # fileid += 1
-    # pkl.dump(lightgbms, open(gbdt_param_filename,'wb'))
+
+    
     lightgbms = []
-    target_dim = 2#62
+    target_dim = 62
     for i in range(target_dim):
         lightgbm = pkl.load(open(gbdt_param_filename+str(i)+'.pkl','rb'))
         lightgbms.append(lightgbm)
@@ -343,25 +347,34 @@ def refine_gbdt(train_loader, model, criterion, optimizer, args):
     print("original LightGBM paramers:")
     print(lightgbms[0].get_params())
     # target_dim = 0
-    
+    end =  time.time()
     for fileid in range(1, num_pkl_files):
         filename = './gbdt_feature/gbdt_feature' +str(fileid)+'.pkl'
-        print("refine gbdt on feature:"+filename)
         [batched_mid_features, batched_target] = pkl.load(open(filename,'rb'))
-        set_trace()
+        logging.info("refine gbdt on feature file:"+filename)
+        n_samples = batched_mid_features.shape[0]
+        logging.info(f'with [{n_samples}] new training samples')
+        # set_trace()
         for i in range(target_dim):
             params = lightgbms[i].get_params()
             params['max_iter'] = params['max_iter'] + num_tree_increase # for every batch data, increase 2 trees
+            params['max_bins'] = max(int((params['max_bins'] + 1) /2  - 1), 7)
+
+            # params['max_bins'] = params['max_bins'] + params['max_bins'] + 1 # increase like 15,31,63
+            params['max_leaf_nodes'] = params['max_leaf_nodes'] + params['max_leaf_nodes'] +1
             params['warm_start'] = True 
-            lightgbms[i].set_params(params)
+            lightgbms[i].set_params(**params)
             lightgbms[i].fit(batched_mid_features, batched_target[:,i])
+            elapse = time.time() - end
+            end = time.time()
+            logging.info(f'refined gbdt for target dim: [{i}][ time:{elapse/60:.2f}]')
+            pkl.dump(lightgbms[i], open(gbdt_param_filename + '_ref'+str(i)+'.pkl','wb'))
     
-    for i in range(target_dim):
-        
-        pkl.dump(lightgbms[i], open(gbdt_param_filename + '_ref'+str(i)+'.pkl','wb'))
-    print("refined LightGBM paramers:")
-    print(lightgbms[0].get_params())
-    print("saved gbdt after refinement.")
+        # for i in range(target_dim):
+        #     pkl.dump(lightgbms[i], open(gbdt_param_filename + '_ref'+str(i)+'.pkl','wb'))
+        print("refined LightGBM paramers:")
+        print(lightgbms[0].get_params())
+        print("saved gbdt after refinement.")
 
 
     # # model.eval()
@@ -433,8 +446,9 @@ class GBDT_Predictor:
         self.lightgbms = []
         for i in range(self.target_dim):
             self.lightgbm = pkl.load(open(gbdt_param_filename+ '_ref' + str(i) + '.pkl','rb'))
+            # self.lightgbm = pkl.load(open(gbdt_param_filename+ str(i) + '.pkl','rb'))
             self.lightgbms.append(self.lightgbm)
-            set_trace()
+            # set_trace()
     def predict(self,input, mid_features):
         batch_size = input.shape[0]
         if batch_size != self.batched_gbdt_features.shape[0]:
@@ -506,38 +520,46 @@ def validate_gbdt(val_loader, model, criterion, args):
             attack_maxstepsize = 0.01#np.abs(input_original.cpu().numpy()).mean()*0.02
             input_upper_limit= input_original + attack_maxstepsize
             input_lower_limit = input_original - attack_maxstepsize
-            attack_stepsize = 100000.0
+            steps = 10
+            attack_stepsize = attack_maxstepsize/steps
+            # attack_stepsize = 100000.0
             input.retain_grad()
-            for attack_iter in range(10):
+            for attack_iter in range(steps):
                 loss = criterion(output, target)
                 loss.backward()
                 # set_trace()
                 # input.abs().mean()/(input.grad.abs().mean())
                 input.detach()
-                input.data = input.data + input.grad * attack_stepsize
+                input.data = input.data + input.grad.sign() * attack_stepsize
                 input.data[input.data>input_upper_limit] = input_upper_limit.data[input.data>input_upper_limit]
                 input.data[input.data<input_lower_limit] = input_lower_limit.data[input.data<input_lower_limit]
                 input.requires_grad= True
                 input.retain_grad()
                 output = model(input)    
             gbdt_output = gbdt.predict(input, model.module.mid_features)
-            gbdt_output = output * (1- alpha) + gbdt_output * alpha    
+            # gbdt_output = output * (1- alpha) + gbdt_output * alpha    
             loss = criterion(output, target)
             losses_cnn_attacked.append(loss.item())
             loss = criterion(gbdt_output, target)
             losses_gbdt_attacked.append(loss.item())
 
         # if i> max_batches_for_eval: break
-        # if i % args.print_freq==0:
-        #     print("validate gbdt for:"+str(i))
+        if i % args.print_freq==0:
+            print("validate gbdt for:"+str(i))
+            elapse = time.time() - end
+            # loss = np.mean(losses)
+            logging.info(f'alpha[{alpha}] Time {elapse/60:.3f} Val: [{i} /{len(val_loader)}]\t'
+                         f'CNN Loss original {np.mean(losses_cnn_original)*100:.4f}\t'
+                         f'CNN Loss attacked {np.mean(losses_cnn_attacked)*100:.4f}\t')
+            logging.info(f'GBDT Loss original {np.mean(losses_gbdt_original)*100:.4f}\t'
+                         f'GBDT Loss attacked {np.mean(losses_gbdt_attacked)*100:.4f}\t')
     elapse = time.time() - end
     # loss = np.mean(losses)
-    logging.info(f'alpha[{alpha}] Val: [{i} /{len(val_loader)}]\t'
+    logging.info(f'alpha[{alpha}] Time {elapse/60:.3f} Val: [{i} /{len(val_loader)}]\t'
                  f'CNN Loss original {np.mean(losses_cnn_original)*100:.4f}\t'
-                 f'CNN Loss attacked {np.mean(losses_cnn_attacked)*100:.4f}\t'
-                 f'GBDT Loss original {np.mean(losses_gbdt_original)*100:.4f}\t'
-                 f'GBDT Loss attacked {np.mean(losses_gbdt_attacked)*100:.4f}\t'
-                 f'Time {elapse:.3f}')
+                 f'CNN Loss attacked {np.mean(losses_cnn_attacked)*100:.4f}\t')
+    logging.info(f'GBDT Loss original {np.mean(losses_gbdt_original)*100:.4f}\t'
+                 f'GBDT Loss attacked {np.mean(losses_gbdt_attacked)*100:.4f}\t')
 
 
 
@@ -626,8 +648,8 @@ def main():
     if args.gbdt==1:
         # prepare_gbdt(train_loader, model, criterion, optimizer, args)
         # generate_gbdt_dataset(train_loader, model, criterion, optimizer, args)
-        train_gbdt(train_loader, model, criterion, optimizer, args)
-        refine_gbdt(train_loader, model, criterion, optimizer, args)
+        # train_gbdt(train_loader, model, criterion, optimizer, args)
+        # refine_gbdt(train_loader, model, criterion, optimizer, args)
         for epoch in range(args.start_epoch, args.epochs + 1):
             # adjust learning rate
             adjust_learning_rate(optimizer, epoch, args.milestones)
@@ -638,10 +660,10 @@ def main():
         validate_gbdt(val_loader, model, criterion, args)
         print("with original model:")
         # validate(val_loader, model, criterion, epoch, args)
-        for epoch in range(0,4):
-            args.alpha += base_alpha
-            print("with gbdt model of alpha:"+str(args.alpha))
-            validate_gbdt(val_loader, model, criterion, args)
+        # for epoch in range(0,4):
+        #     args.alpha += base_alpha
+        #     print("with gbdt model of alpha:"+str(args.alpha))
+        #     validate_gbdt(val_loader, model, criterion, args)
 
 
     else:

@@ -1,7 +1,7 @@
 python train.py --arch="mobilenet_1" ^
     --start-epoch=1 ^
     --gbdt=1 ^
-    --alpha=0.4 ^
+    --alpha=0.6 ^
     --loss=wpdc ^
     --snapshot="snapshot/phase1_wpdc" ^
     --param-fp-train='D:/data/facealignment/train.configs/param_all_norm.pkl' ^
@@ -14,7 +14,7 @@ python train.py --arch="mobilenet_1" ^
     --base-lr=0.02 ^
     --epochs=1 ^
     --milestones=30,40 ^
-    --print-freq=50 ^
+    --print-freq=100 ^
     --devices-id=0 ^
     --workers=8 ^
     --filelists-train="D:/data/facealignment/train.configs/train_aug_120x120.list.train" ^

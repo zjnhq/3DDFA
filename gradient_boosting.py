@@ -60,7 +60,7 @@ from sklearn.ensemble._hist_gradient_boosting._gradient_boosting import _update_
 from sklearn.ensemble._hist_gradient_boosting.common import Y_DTYPE, X_DTYPE, X_BINNED_DTYPE
 
 from sklearn.ensemble._hist_gradient_boosting.binning import _BinMapper
-from sklearn.ensemble._hist_gradient_boosting.grower import TreeGrower
+from grower import TreeGrower
 from sklearn.ensemble._hist_gradient_boosting.loss import _LOSSES
 from sklearn.ensemble._hist_gradient_boosting.loss import BaseLoss
 
@@ -375,7 +375,10 @@ class BaseHistGradientBoosting(BaseEstimator, ABC):
             random_state=self._random_seed,
             n_threads=n_threads,
         )
-        X_binned_train = self._bin_data(X_train, is_training_data=True)
+        # set_trace()
+        is_training_data = True
+        # if self.warm_start:is_training_data = False
+        X_binned_train = self._bin_data(X_train, is_training_data=is_training_data)
         if X_val is not None:
             X_binned_val = self._bin_data(X_val, is_training_data=False)
         else:
@@ -495,7 +498,12 @@ class BaseHistGradientBoosting(BaseEstimator, ABC):
             self.validation_score_ = self.validation_score_.tolist()
 
             # Compute raw predictions
-            raw_predictions = self._raw_predict(X_binned_train, n_threads=n_threads)
+
+            if self.warm_start:
+                raw_predictions = self._raw_predict(X_train, n_threads=n_threads, is_binned = False)
+            else:
+                raw_predictions = self._raw_predict(X_binned_train, n_threads=n_threads)
+
             if self.do_early_stopping_ and self._use_validation_data:
                 raw_predictions_val = self._raw_predict(
                     X_binned_val, n_threads=n_threads
@@ -570,6 +578,7 @@ class BaseHistGradientBoosting(BaseEstimator, ABC):
                     self._loss.update_leaves_values(
                         grower, y_train, raw_predictions[k, :], sample_weight_train
                     )
+                # set_trace()
 
                 predictor = grower.make_predictor(
                     binning_thresholds=self._bin_mapper.bin_thresholds_
@@ -805,6 +814,7 @@ class BaseHistGradientBoosting(BaseEstimator, ABC):
         tic = time()
         if is_training_data:
             X_binned = self._bin_mapper.fit_transform(X)  # F-aligned array
+            # self._bin_mapper_threshold = self._bin_mapper.bin_thresholds_
         else:
             X_binned = self._bin_mapper.transform(X)  # F-aligned array
             # We convert the array to C-contiguous since predicting is faster
@@ -860,7 +870,7 @@ class BaseHistGradientBoosting(BaseEstimator, ABC):
 
         print(log_msg)
 
-    def _raw_predict(self, X, n_threads=None):
+    def _raw_predict(self, X, n_threads=None, is_binned=None):
         """Return the sum of the leaves values over all predictors.
 
         Parameters
@@ -878,7 +888,8 @@ class BaseHistGradientBoosting(BaseEstimator, ABC):
         raw_predictions : array, shape (n_trees_per_iteration, n_samples)
             The raw predicted values.
         """
-        is_binned = getattr(self, "_in_fit", False)
+        if is_binned is None:
+            is_binned = getattr(self, "_in_fit", False)
         dtype = X_BINNED_DTYPE if is_binned else X_DTYPE
         X = self._validate_data(X, dtype=dtype, force_all_finite=False, reset=False)
         check_is_fitted(self)
@@ -898,6 +909,7 @@ class BaseHistGradientBoosting(BaseEstimator, ABC):
         # time from the number of threads used at fit time because the model
         # can be deployed on a different machine for prediction purposes.
         n_threads = _openmp_effective_n_threads(n_threads)
+        # set_trace()
         self._predict_iterations(
             X, self._predictors, raw_predictions, is_binned, n_threads
         )
