@@ -445,8 +445,8 @@ class GBDT_Predictor:
             print('num_feat != self.rawfeature_index.shape[0] ')
         self.lightgbms = []
         for i in range(self.target_dim):
-            self.lightgbm = pkl.load(open(gbdt_param_filename+ '_ref' + str(i) + '.pkl','rb'))
-            # self.lightgbm = pkl.load(open(gbdt_param_filename+ str(i) + '.pkl','rb'))
+            # self.lightgbm = pkl.load(open(gbdt_param_filename+ '_ref' + str(i) + '.pkl','rb'))
+            self.lightgbm = pkl.load(open(gbdt_param_filename+ str(i) + '.pkl','rb'))
             self.lightgbms.append(self.lightgbm)
             # set_trace()
     def predict(self,input, mid_features):
@@ -646,10 +646,10 @@ def main():
 
     # set_trace()
     if args.gbdt==1:
-        # prepare_gbdt(train_loader, model, criterion, optimizer, args)
-        # generate_gbdt_dataset(train_loader, model, criterion, optimizer, args)
-        # train_gbdt(train_loader, model, criterion, optimizer, args)
-        # refine_gbdt(train_loader, model, criterion, optimizer, args)
+        prepare_gbdt(train_loader, model, criterion, optimizer, args)
+        generate_gbdt_dataset(train_loader, model, criterion, optimizer, args)
+        train_gbdt(train_loader, model, criterion, optimizer, args)
+        refine_gbdt(train_loader, model, criterion, optimizer, args)
         for epoch in range(args.start_epoch, args.epochs + 1):
             # adjust learning rate
             adjust_learning_rate(optimizer, epoch, args.milestones)

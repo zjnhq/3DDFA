@@ -14,7 +14,6 @@ samples/*.ply
 samples/*.txt
 
 .ipynb_checkpoints/
-*.ipynb
 tmp/
 
 models/shape_predictor_68_face_landmarks.dat
@@ -33,5 +32,4 @@ samples/*.obj
 output.log
 gbdt_feature/*
 gbdt_param/*
-important_feature.pkl
 important_feature.pkl

@@ -1,43 +1,6 @@
 """Fast Gradient Boosting decision trees for classification and regression."""
 # Author: Nicolas Hug
 
-# from abc import ABC, abstractmethod
-# from functools import partial
-# import warnings
-
-# import numpy as np
-# from timeit import default_timer as time
-# # from sklearn._loss.loss import (
-# #     _LOSSES,
-# #     BaseLoss,
-# #     AbsoluteError,
-# #     HalfBinomialLoss,
-# #     HalfMultinomialLoss,
-# #     HalfPoissonLoss,
-# #     HalfSquaredError,
-# #     PinballLoss,
-# # )
-# from sklearn.base import BaseEstimator, RegressorMixin, ClassifierMixin, is_classifier
-# from sklearn.utils import check_random_state, resample
-# from sklearn.utils.validation import (
-#     check_is_fitted,
-#     check_consistent_length,
-#     _check_sample_weight,
-# )
-# from sklearn.utils._openmp_helpers import _openmp_effective_n_threads
-# from sklearn.utils.multiclass import check_classification_targets
-# from sklearn.metrics import check_scoring
-# from sklearn.model_selection import train_test_split
-# from sklearn.preprocessing import LabelEncoder
-# from sklearn.ensemble._gradient_boosting import _update_raw_predictions
-# from sklearn.ensemble.common import Y_DTYPE, X_DTYPE, X_BINNED_DTYPE, G_H_DTYPE
-
-# from sklearn.ensemble.binning import _BinMapper
-# from sklearn.ensemble.grower import TreeGrower
-
-from pdb import set_trace
-
-
 from abc import ABC, abstractmethod
 from functools import partial
 import warnings
@@ -64,6 +27,7 @@ from grower import TreeGrower
 from sklearn.ensemble._hist_gradient_boosting.loss import _LOSSES
 from sklearn.ensemble._hist_gradient_boosting.loss import BaseLoss
 
+from pdb import set_trace
 
 class BaseHistGradientBoosting(BaseEstimator, ABC):
     """Base class for histogram-based gradient boosting estimators."""
