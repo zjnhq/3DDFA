@@ -33,3 +33,7 @@ output.log
 gbdt_feature/*
 gbdt_param/*
 important_feature.pkl
+samples/*gbdt.jpg
+samples/*cnn.jpg
+samples/*gbdt.png
+samples/*cnn.png
