@@ -109,6 +109,10 @@ class NormalizeGjz(object):
         tensor.sub_(self.mean).div_(self.std)
         return tensor
 
+    def reverse(self, tensor):
+        tensor.mul_(self.std).add_(self.mean)
+        return tensor
+
 class NormalizeGjzNumpy(object):
     def __init__(self, mean, std):
         self.mean = mean

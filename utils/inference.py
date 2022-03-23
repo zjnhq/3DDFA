@@ -17,7 +17,7 @@ def get_suffix(filename):
     return filename[pos:]
 
 
-def crop_img(img, roi_box):
+def crop_img(img, roi_box, resize_axis = None):
     h, w = img.shape[:2]
 
     sx, sy, ex, ey = [int(round(_)) for _ in roi_box]
@@ -47,6 +47,62 @@ def crop_img(img, roi_box):
         dey = dh
 
     res[dsy:dey, dsx:dex] = img[sy:ey, sx:ex]
+    if resize_axis is not None: resize_axis = [dsy,dey, dsx,dex]
+    return res
+
+def crop_img_with_coord(img, roi_box):
+    h, w = img.shape[:2]
+
+    sx, sy, ex, ey = [int(round(_)) for _ in roi_box]
+    dh, dw = ey - sy, ex - sx
+    if len(img.shape) == 3:
+        res = np.zeros((dh, dw, 3), dtype=np.uint8)
+    else:
+        res = np.zeros((dh, dw), dtype=np.uint8)
+    if sx < 0:
+        sx, dsx = 0, -sx
+    else:
+        dsx = 0
+
+    if ex > w:
+        ex, dex = w, dw - (ex - w)
+    else:
+        dex = dw
+
+    if sy < 0:
+        sy, dsy = 0, -sy
+    else:
+        dsy = 0
+
+    if ey > h:
+        ey, dey = h, dh - (ey - h)
+    else:
+        dey = dh
+
+    res[dsy:dey, dsx:dex] = img[sy:ey, sx:ex]
+    return res, [dsy,dey, dsx,dex]
+
+def crop_back_img(img, roi_box, res, resize_axis = None):
+    h, w = img.shape[:2]
+    if resize_axis is not None: [dsy,dey, dsx,dex] = resize_axis 
+
+    sx, sy, ex, ey = [int(round(_)) for _ in roi_box]
+    dh, dw = ey - sy, ex - sx
+    # if len(img.shape) == 3:
+    #     res = np.zeros((dh, dw, 3), dtype=np.uint8)
+    # else:
+    #     res = np.zeros((dh, dw), dtype=np.uint8)
+    if sx < 0:
+        sx = 0
+    if ex > w:
+        ex = w
+    if sy < 0:
+        sy  = 0
+    if ey > h:
+        ey= h
+    
+    img[sy:ey, sx:ex] = res[dsy:dey, dsx:dex]
+    
     return res
 
 

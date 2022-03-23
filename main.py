@@ -26,6 +26,7 @@ from utils.render import get_depths_image, cget_depths_image, cpncc
 from utils.paf import gen_img_paf
 import argparse
 import torch.backends.cudnn as cudnn
+from train import GBDT_Predictor
 from pdb import *
 from sklearn.ensemble import *
 import pickle as pkl
@@ -34,8 +35,8 @@ STD_SIZE = 120
 
 def main(args):
     # 1. load pre-tained model
-    # checkpoint_fp = 'models/phase1_wpdc_vdc.pth.tar'
-    checkpoint_fp = 'models/phase1_wpdc.pth.tar'
+    checkpoint_fp = 'models/phase1_wpdc_vdc.pth.tar'
+    # checkpoint_fp = 'models/phase1_wpdc.pth.tar'
     arch = 'mobilenet_1'
 
     checkpoint = torch.load(checkpoint_fp, map_location=lambda storage, loc: storage)['state_dict']
@@ -61,14 +62,15 @@ def main(args):
     if args.gbdt==1:
         feat_index_filename = 'important_feature.pkl'
         gbdt_param_filename = './gbdt_param/gbdt_param'
-        [important_rawfeature, important_midfeature, num_feat, target_dim]=pkl.load(open(feat_index_filename,'rb'))
-        lightgbms = []
-        target_dim = 62
-        for i in range(target_dim):
-            lightgbm = pkl.load(open(gbdt_param_filename + str(i) + '.pkl','rb'))
-            lightgbms.append(lightgbm)
-        batched_gbdt_features = np.zeros([1,num_feat + num_feat])
-        batched_gbdt_predict = np.zeros([1,target_dim])
+        gbdt = GBDT_Predictor(feat_index_filename, gbdt_param_filename)
+        # [important_rawfeature, important_midfeature, num_feat, target_dim]=pkl.load(open(feat_index_filename,'rb'))
+        # lightgbms = []
+        # target_dim = 62
+        # for i in range(target_dim):
+        #     lightgbm = pkl.load(open(gbdt_param_filename + str(i) + '.pkl','rb'))
+        #     lightgbms.append(lightgbm)
+        # batched_gbdt_features = np.zeros([1,num_feat + num_feat])
+        # batched_gbdt_predict = np.zeros([1,target_dim])
 
     # 3. forward
     tri = sio.loadmat('visualize/tri.mat')['tri']
@@ -119,19 +121,21 @@ def main(args):
                 if args.mode == 'gpu':
                     input = input.cuda()
                 param = model(input)
+                set_trace()
                 if args.gbdt==1:
+                    # # set_trace()
+                    # rawfeat = input.cpu().detach().numpy().reshape(-1)[important_rawfeature]
+                    # batched_gbdt_features[0,:num_feat] = rawfeat
+                    # midfeat = model.mid_features.cpu().detach().numpy().reshape(-1)[important_midfeature]
+                    # batched_gbdt_features[0,num_feat:] = midfeat
+                    # for d in range(target_dim):
+                    #     batched_gbdt_predict[0,d] = lightgbms[d].predict(batched_gbdt_features)
+                    #     gbdt_predict =torch.tensor(batched_gbdt_predict)
+                    #     if args.mode == 'gpu': gbdt_predict = gbdt_predict.cuda()
+                    #     param = param * (1- args.alpha) + gbdt_predict* args.alpha
+                    #     # output = output * (1- alpha) + torch.tensor(batched_gbdt_predict).cuda()* alpha
                     # set_trace()
-                    rawfeat = input.cpu().detach().numpy().reshape(-1)[important_rawfeature]
-                    batched_gbdt_features[0,:num_feat] = rawfeat
-                    midfeat = model.mid_features.cpu().detach().numpy().reshape(-1)[important_midfeature]
-                    batched_gbdt_features[0,num_feat:] = midfeat
-                    for d in range(target_dim):
-                        batched_gbdt_predict[0,d] = lightgbms[d].predict(batched_gbdt_features)
-                        gbdt_predict =torch.tensor(batched_gbdt_predict)
-                        if args.mode == 'gpu': gbdt_predict = gbdt_predict.cuda()
-                        param = param * (1- args.alpha) + gbdt_predict* args.alpha
-                        # output = output * (1- alpha) + torch.tensor(batched_gbdt_predict).cuda()* alpha
-                    # set_trace()
+                    param_gbdt = gbdt.predict(input, model.mid_features)
                 param = param.squeeze().cpu().numpy().flatten().astype(np.float32)
 
             # 68 pts
