@@ -472,18 +472,18 @@ def validate_gbdt(val_loader, model, criterion, args):
     losses_cnn_attacked = []
     losses_gbdt_original = []
     losses_gbdt_attacked = []
-    use_adattack = 1
-    if use_adattack ==0:
+    use_attack = 1
+    if use_attack ==0:
         losses_cnn_attacked.append(0.0)
         losses_gbdt_attacked.append(0.0)
-    if use_adattack==1:
+    if use_attack==1:
         model.train()
         model.module.SetMidfeatureNeedGrad(True)
     for i, (input, target) in enumerate(val_loader):
         # compute output
         target.requires_grad = False
         target = target.cuda(non_blocking=True)
-        if use_adattack==1:input.requires_grad = True
+        if use_attack==1:input.requires_grad = True
         output = model(input)
 
         gbdt_output = gbdt.predict(input, model.module.mid_features)
@@ -495,7 +495,7 @@ def validate_gbdt(val_loader, model, criterion, args):
         loss = criterion(output, target)
         losses_cnn_original.append(loss.item())
 
-        if use_adattack==1:
+        if use_attack==1:
             input_original = input.clone().detach()
             attack_maxstepsize = 0.01#np.abs(input_original.cpu().numpy()).mean()*0.02
             input_upper_limit= input_original + attack_maxstepsize
@@ -555,11 +555,10 @@ def plot_gbdt(val_loader, model, criterion, args, use_gbdt, use_attack):
     losses_cnn_attacked = []
     losses_gbdt_original = []
     losses_gbdt_attacked = []
-    use_adattack = 1
-    if use_adattack ==0:
+    if use_attack ==0:
         losses_cnn_attacked.append(0.0)
         losses_gbdt_attacked.append(0.0)
-    if use_adattack==1:
+    if use_attack==1:
         model.train()
         model.module.SetMidfeatureNeedGrad(True)
 
@@ -581,14 +580,14 @@ def plot_gbdt(val_loader, model, criterion, args, use_gbdt, use_attack):
         target = target.cuda(non_blocking=True)
         img_fp = "plot/save"+str(i)+'.jpg'
         suffix = get_suffix(img_fp)
-        if use_adattack==1:input.requires_grad = True
+        if use_attack==1:input.requires_grad = True
         output = model(input)
 
         if use_gbdt==1: output = gbdt.predict(input, model.module.mid_features)
         loss = criterion(output, target)
         losses_cnn_original.append(loss.item())
 
-        if use_adattack==1:
+        if use_attack==1:
             input_original = input.clone().detach()
             attack_maxstepsize = 0.01#np.abs(input_original.cpu().numpy()).mean()*0.02
             input_upper_limit= input_original + attack_maxstepsize
@@ -607,6 +606,7 @@ def plot_gbdt(val_loader, model, criterion, args, use_gbdt, use_attack):
                 input.requires_grad= True
                 input.retain_grad()
                 output = model(input)    
+                # set_trace()
         if use_gbdt==1: output = gbdt.predict(input, model.module.mid_features)
         # gbdt_output = output * (1- alpha) + gbdt_output * alpha    
         loss = criterion(output, target)
@@ -622,7 +622,7 @@ def plot_gbdt(val_loader, model, criterion, args, use_gbdt, use_attack):
         # 68 pts
         h,w,nc = img.shape[2], img.shape[3], img.shape[1]
         set_trace()
-        if use_adattack==0:
+        if use_attack==0:
             img_ori = img.transpose(2,3,1,0).reshape(h,w,nc)
         else:
             img_attack = args.transform.reverse(input.detach())
