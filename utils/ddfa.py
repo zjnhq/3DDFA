@@ -168,3 +168,35 @@ class DDFATestDataset(data.Dataset):
 
     def __len__(self):
         return len(self.lines)
+
+
+
+class DDFAPlotDataset(data.Dataset):
+    def __init__(self, root, filelists, param_fp, transform=None, **kargs):
+        self.root = root
+        self.transform = transform
+        self.lines = Path(filelists).read_text().strip().split('\n')
+        # set_trace()
+        param = pickle.load(open(param_fp[1:-1],'rb'))
+        self.params = _numpy_to_tensor(param) #_numpy_to_tensor(_load_cpu(param_fp))
+        self.img_loader = img_loader
+
+    def _target_loader(self, index):
+        target = self.params[index]
+
+        return target
+
+    def __getitem__(self, index):
+        # set_trace()
+        path = osp.join(self.root, self.lines[index])
+        # print(path)
+        img_cv = self.img_loader(path)
+
+        target = self._target_loader(index)
+
+        if self.transform is not None:
+            img = self.transform(img_cv)
+        return img, target, img_cv
+
+    def __len__(self):
+        return len(self.lines)

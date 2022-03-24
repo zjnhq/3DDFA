@@ -7,7 +7,7 @@ from math import sqrt
 import scipy.io as sio
 import matplotlib.pyplot as plt
 from .ddfa import reconstruct_vertex
-
+from pdb import set_trace
 
 def get_suffix(filename):
     """a.jpg -> jpg"""
@@ -202,10 +202,12 @@ def predict_dense(param, roi_box):
     return _predict_vertices(param, roi_box, dense=True)
 
 
-def draw_landmarks(img, pts, style='fancy', wfp=None, show_flg=False, **kwargs):
+def draw_landmarks(img, pts, style='fancy', wfp=None, show_flg=False, note =None, **kwargs):
+    # set_trace()
     """Draw landmarks using matplotlib"""
     height, width = img.shape[:2]
     plt.figure(figsize=(12, height / width * 12))
+    # plt.figure(figsize=(height, width))
     plt.imshow(img[:, :, ::-1])
     plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
     plt.axis('off')
@@ -220,6 +222,7 @@ def draw_landmarks(img, pts, style='fancy', wfp=None, show_flg=False, **kwargs):
             alpha = 0.8
             markersize = 4
             lw = 1.5
+            lw = 3.5
             color = kwargs.get('color', 'w')
             markeredgecolor = kwargs.get('markeredgecolor', 'black')
 
@@ -241,8 +244,12 @@ def draw_landmarks(img, pts, style='fancy', wfp=None, show_flg=False, **kwargs):
                          color=color,
                          markeredgecolor=markeredgecolor, alpha=alpha)
 
+    if note is not None:
+        plt.title(note)
+        print("title:"+note)
     if wfp is not None:
-        plt.savefig(wfp, dpi=200)
+        # plt.savefig(wfp, dpi=200)
+        plt.savefig(wfp, dpi=100)
         print('Save visualization result to {}'.format(wfp))
     if show_flg:
         plt.show()

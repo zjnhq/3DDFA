@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 import mobilenet_v1
 import torch.backends.cudnn as cudnn
 import scipy.io as sio
-from utils.ddfa import DDFADataset, ToTensorGjz, NormalizeGjz
+from utils.ddfa import DDFADataset, DDFAPlotDataset, ToTensorGjz, NormalizeGjz
 from utils.ddfa import str2bool, AverageMeter
 from utils.io import mkdir
 from vdc_loss import VDCLoss
@@ -342,18 +342,22 @@ def train_gbdt(train_loader, model, criterion, optimizer, args):
     
     lightgbms = []
     target_dim = batched_target.shape[1]
-    max_leaf_nodes = 31
+    max_leaf_nodes = 63
     max_bins = 31
     end =  time.time()
     for i in range(target_dim):
         # print("training gbdt for target dim:"+str(i))
-        lightgbm = HistGradientBoostingRegressor(max_iter=num_init_trees, max_leaf_nodes=max_leaf_nodes, max_bins=max_bins, warm_start = False)
+        verbose = 0
+        if i%15==0:
+            verbose=1
+        lightgbm = HistGradientBoostingRegressor(max_iter=num_init_trees, learning_rate=0.2, max_leaf_nodes=max_leaf_nodes, max_bins=max_bins, warm_start = False, verbose=verbose)
         # lightgbm = GradientBoostingRegressor(n_estimators=20, max_depth=6)
+
         lightgbm.fit(batched_mid_features, batched_target[:,i])
         pkl.dump(lightgbm, open(gbdt_param_filename+str(i)+'.pkl','wb'))
         lightgbms.append(lightgbm)
         elapse = time.time() - end
-        logging.info(f'trained gbdt for target dim: [{i}][ time:{elapse/60}:.2f]\t')
+        logging.info(f'trained gbdt for target dim: [{i}][ time:{elapse/60:.2f}]\t')
 
 def refine_gbdt(train_loader, model, criterion, optimizer, args):
 
@@ -431,8 +435,8 @@ class GBDT_Predictor:
             print('num_feat != self.rawfeature_index.shape[0] ')
         self.lightgbms = []
         for i in range(self.target_dim):
-            # self.lightgbm = pkl.load(open(gbdt_param_filename+ '_ref' + str(i) + '.pkl','rb'))
-            self.lightgbm = pkl.load(open(gbdt_param_filename+ str(i) + '.pkl','rb'))
+            self.lightgbm = pkl.load(open(gbdt_param_filename+ '_ref' + str(i) + '.pkl','rb'))
+            # self.lightgbm = pkl.load(open(gbdt_param_filename+ str(i) + '.pkl','rb'))
             self.lightgbms.append(self.lightgbm)
             # set_trace()
     def predict(self,input, mid_features):
@@ -563,38 +567,52 @@ def plot_gbdt(val_loader, model, criterion, args, use_gbdt, use_attack):
         model.module.SetMidfeatureNeedGrad(True)
 
     tri = sio.loadmat('visualize/tri.mat')['tri']
-    for i, (img, target) in enumerate(val_loader):
+    plot_num = 0
+    for i, (img, target, img_cv) in enumerate(val_loader):
         # set_trace()
-        if i>4:break
+        if i>100 or plot_num>10:break
         
         input = args.transform(img.clone())
         prefix = '_orig'
-        if use_attack == 0:
+        if use_attack == 1:
             prefix = '_attack'
         if use_gbdt == 0:
-            prefix = prefix+ '_cnn'
+            prefix = prefix + '_cnn'
         else:
-            prefix = prefix+ '_gbdt'
+            prefix = prefix + '_gbdt'
         # compute output
+        outputdict = [0,0,0,0]
+        lossdict = [0,0,0,0]
+        prefixdict = [0,0,0,0]
         target.requires_grad = False
         target = target.cuda(non_blocking=True)
         img_fp = "plot/save"+str(i)+'.jpg'
         suffix = get_suffix(img_fp)
         if use_attack==1:input.requires_grad = True
         output = model(input)
-
-        if use_gbdt==1: output = gbdt.predict(input, model.module.mid_features)
         loss = criterion(output, target)
-        losses_cnn_original.append(loss.item())
+        testid = 0
+        outputdict[testid] = output.clone().detach()
+        lossdict[testid] = loss.item()
+        prefixdict[testid] = 'orig_cnn'
+
+        if use_gbdt==1: 
+            testid+=1
+            output_gbdt = gbdt.predict(input, model.module.mid_features)
+            loss_gbdt = criterion(output_gbdt, target)
+            outputdict[testid] = output_gbdt.clone().detach()
+            lossdict[testid] += loss_gbdt.item()
+            prefixdict[testid] = 'orig_gbdt'
 
         if use_attack==1:
             input_original = input.clone().detach()
             attack_maxstepsize = 0.01#np.abs(input_original.cpu().numpy()).mean()*0.02
             input_upper_limit= input_original + attack_maxstepsize
             input_lower_limit = input_original - attack_maxstepsize
-            steps = 10
+            steps = 3
             attack_stepsize = attack_maxstepsize/steps
-            # attack_stepsize = 100000.0
+            # print("prediction before:"+str(output[0,-6:]))
+            input.requires_grad = True
             input.retain_grad()
             for attack_iter in range(steps):
                 loss = criterion(output, target)
@@ -606,99 +624,135 @@ def plot_gbdt(val_loader, model, criterion, args, use_gbdt, use_attack):
                 input.requires_grad= True
                 input.retain_grad()
                 output = model(input)    
-                # set_trace()
-        if use_gbdt==1: output = gbdt.predict(input, model.module.mid_features)
-        # gbdt_output = output * (1- alpha) + gbdt_output * alpha    
-        loss = criterion(output, target)
-        losses_cnn_attacked.append(loss.item())
-        # loss = criterion(gbdt_output, target)
-        # losses_gbdt_attacked.append(loss.item())
+            # print("prediction after:"+str(output[0,-6:]))
+        
+            # gbdt_output = output * (1- alpha) + gbdt_output * alpha    
+            loss = criterion(output, target)
+            losses_cnn_attacked.append(loss.item())
+            testid +=1
+            outputdict[testid] = output.clone().detach()
+            lossdict[testid] += loss.item()
+            prefixdict[testid] = 'attack_cnn'
 
-        print("prefix:"+str(i)+" loss:"+str(loss))
+            if use_gbdt==1: 
+                output_gbdt = gbdt.predict(input, model.module.mid_features)
+                loss_gbdt = criterion(output_gbdt, target)
+                testid +=1
+                outputdict[testid] = output_gbdt.clone().detach()
+                lossdict[testid] += loss_gbdt.item()
+                prefixdict[testid] = 'attack_gbdt'
+            # loss = criterion(gbdt_output, target)
+            # losses_gbdt_attacked.append(loss.item())
 
-        param = output
-        param = param.squeeze().detach().cpu().numpy().flatten().astype(np.float32)
-
-        # 68 pts
-        h,w,nc = img.shape[2], img.shape[3], img.shape[1]
-        set_trace()
-        if use_attack==0:
-            img_ori = img.transpose(2,3,1,0).reshape(h,w,nc)
+        print(prefixdict)
+        print(lossdict)
+        plot_this = False
+        if lossdict[1]< lossdict[0] and (lossdict[3]< lossdict[2]) and lossdict[2]<0.1 and lossdict[0]<0.1:
+            plot_this = True
+            plot_num +=1
         else:
-            img_attack = args.transform.reverse(input.detach())
-            img_attack = img_attack.cpu().numpy().transpose(2,3,1,0).reshape(h,w,nc)
-            img_ori= img_attack
+            print("skip this pic")
+        if plot_this:
+            for j in range(testid+1):
 
-        bbox= [0, 0, img.shape[2], img.shape[3]]
-        # bbox = [rect.left(), rect.top(), rect.right(), rect.bottom()]
-        roi_box = parse_roi_box_from_bbox(bbox)
-        pts68 = predict_68pts(param, roi_box)
+                param = outputdict[j]
+                prefix = prefixdict[j]
+                param = param.squeeze().detach().cpu().numpy().flatten().astype(np.float32)
+                # 68 pts
+                h,w,nc = img.shape[2], img.shape[3], img.shape[1]
+                # set_trace()
+                if use_attack==0:
+                    img_ori = img.reshape(nc,h,w).permute(1,2,0).cpu().numpy() # 3 x H x W
+                else:
+                    img_attack = args.transform.reverse(input.detach())
+                    img_attack = img_attack.reshape(nc,h,w).permute(1,2,0).cpu().numpy()#.permute(2,0,1)
+                    img_attack=img_attack.astype(int)
+                    img_attack[img_attack>255] =255
+                    img_attack[img_attack<0] = 0
 
-        pts_res = []
-        Ps = []  # Camera matrix collection
-        poses = []  # pose collection, [todo: validate it]
-        vertices_lst = []  # store multiple face vertices
-        ind = 0
-        suffix = get_suffix(img_fp)
+                    img_ori= img_attack
 
-        pts_res.append(pts68)
-        P, pose = parse_pose(param)
-        Ps.append(P)
-        poses.append(pose)
+                img_ori = img.reshape(nc,h,w).permute(1,2,0).cpu().numpy() # 3 x H x W
 
-        ind=i
+                img_ori = img_ori.astype(int) #.transpose(1,2,0)
+                # img_ori = img_cv
 
-        # dense face 3d vertices
-        if args.dump_ply or args.dump_vertex or args.dump_depth or args.dump_pncc or args.dump_obj:
-            vertices = predict_dense(param, roi_box)
-            vertices_lst.append(vertices)
-        if args.dump_ply:
-            fname = '{}_{}_{}.ply'.format(img_fp.replace(suffix, ''), ind, prefix)
-            dump_to_ply(vertices, tri, fname)
-        if args.dump_vertex:
-            dump_vertex(vertices, '{}_{}_{}.mat'.format(img_fp.replace(suffix, ''), ind, prefix))
-        if args.dump_pts:
-            wfp = '{}_{}_{}.txt'.format(img_fp.replace(suffix, ''), ind, prefix)
-            np.savetxt(wfp, pts68, fmt='%.3f')
-            print('Save 68 3d landmarks to {}'.format(wfp))
-        if args.dump_roi_box:
-            wfp = '{}_{}_{}.roibox'.format(img_fp.replace(suffix, ''), ind, prefix)
-            np.savetxt(wfp, roi_box, fmt='%.3f')
-            print('Save roi box to {}'.format(wfp))
-        if args.dump_paf:
-            wfp_paf = '{}_{}_{}_paf.jpg'.format(img_fp.replace(suffix, ''), ind, prefix)
-            wfp_crop = '{}_{}_{}_crop.jpg'.format(img_fp.replace(suffix, ''), ind, prefix)
-            paf_feature = gen_img_paf(img_crop=img, param=param, kernel_size=args.paf_size)
+                # bbox= [0, 0, img.shape[2], img.shape[3]]
+                # bbox = [rect.left(), rect.top(), rect.right(), rect.bottom()]
+                # set_trace()
+                roi_box = [0, 0, img.shape[2], img.shape[3]] #parse_roi_box_from_bbox(bbox)
+                pts68 = predict_68pts(param, roi_box)
 
-            cv2.imwrite(wfp_paf, paf_feature)
-            cv2.imwrite(wfp_crop, img)
-            print('Dump to {} and {}'.format(wfp_crop, wfp_paf))
-        if args.dump_obj:
-            wfp = '{}_{}_{}.obj'.format(img_fp.replace(suffix, ''), ind, prefix)
-            colors = get_colors(img_ori, vertices)
-            write_obj_with_colors(wfp, vertices, tri, colors)
-            print('Dump obj with sampled texture to {}'.format(wfp))
-        ind += 1
+                pts_res = []
+                Ps = []  # Camera matrix collection
+                poses = []  # pose collection, [todo: validate it]
+                vertices_lst = []  # store multiple face vertices
+                ind = 0
+                suffix = get_suffix(img_fp)
 
-        if args.dump_pose:
-            # P, pose = parse_pose(param)  # Camera matrix (without scale), and pose (yaw, pitch, roll, to verify)
-            img_pose = plot_pose_box(img_ori, Ps, pts_res)
-            wfp = img_fp.replace(suffix, '_pose') + prefix+ '.jpg'
-            cv2.imwrite(wfp, img_pose)
-            print('Dump to {}'.format(wfp))
-        if args.dump_depth:
-            wfp = img_fp.replace(suffix, '_depth') + prefix+ '.png'
-            # depths_img = get_depths_image(img_ori, vertices_lst, tri-1)  # python version
-            depths_img = cget_depths_image(img_ori, vertices_lst, tri - 1)  # cython version
-            cv2.imwrite(wfp, depths_img)
-            print('Dump to {}'.format(wfp))
-        if args.dump_pncc:
-            wfp =  img_fp.replace(suffix, '_pncc')+ prefix+ '.png'
-            pncc_feature = cpncc(img_ori, vertices_lst, tri - 1)  # cython version
-            cv2.imwrite(wfp, pncc_feature[:, :, ::-1])  # cv2.imwrite will swap RGB -> BGR
-            print('Dump to {}'.format(wfp))
-        if args.dump_res:
-            draw_landmarks(img_ori, pts_res, wfp=img_fp.replace(suffix, prefix+'.jpg'), show_flg=args.show_flg)
+                pts_res.append(pts68)
+                P, pose = parse_pose(param)
+                Ps.append(P)
+                poses.append(pose)
+
+                ind=i
+
+                # dense face 3d vertices
+                if args.dump_ply or args.dump_vertex or args.dump_depth or args.dump_pncc or args.dump_obj:
+                    vertices = predict_dense(param, roi_box)
+                    vertices_lst.append(vertices)
+                # if args.dump_ply:
+                #     fname = '{}_{}_{}.ply'.format(img_fp.replace(suffix, ''), ind, prefix)
+                #     dump_to_ply(vertices, tri, fname)
+                # if args.dump_vertex:
+                #     dump_vertex(vertices, '{}_{}_{}.mat'.format(img_fp.replace(suffix, ''), ind, prefix))
+                # if args.dump_pts:
+                #     wfp = '{}_{}_{}.txt'.format(img_fp.replace(suffix, ''), ind, prefix)
+                #     np.savetxt(wfp, pts68, fmt='%.3f')
+                #     print('Save 68 3d landmarks to {}'.format(wfp))
+                # if args.dump_roi_box:
+                #     wfp = '{}_{}_{}.roibox'.format(img_fp.replace(suffix, ''), ind, prefix)
+                #     np.savetxt(wfp, roi_box, fmt='%.3f')
+                #     print('Save roi box to {}'.format(wfp))
+                if args.dump_paf:
+                    wfp_paf = '{}_{}_{}_paf.jpg'.format(img_fp.replace(suffix, ''), ind, prefix)
+                    wfp_crop = '{}_{}_{}_crop.jpg'.format(img_fp.replace(suffix, ''), ind, prefix)
+                    paf_feature = gen_img_paf(img_crop=img, param=param, kernel_size=args.paf_size)
+
+                    cv2.imwrite(wfp_paf, paf_feature)
+                    cv2.imwrite(wfp_crop, img)
+                    print('Dump to {} and {}'.format(wfp_crop, wfp_paf))
+                # if args.dump_obj:
+                #     wfp = '{}_{}_{}.obj'.format(img_fp.replace(suffix, ''), ind, prefix)
+                #     colors = get_colors(img_ori, vertices)
+                #     write_obj_with_colors(wfp, vertices, tri, colors)
+                #     print('Dump obj with sampled texture to {}'.format(wfp))
+                ind += 1
+
+                # if args.dump_pose:
+                #     # P, pose = parse_pose(param)  # Camera matrix (without scale), and pose (yaw, pitch, roll, to verify)
+                #     img_pose = plot_pose_box(img_ori, Ps, pts_res)
+                #     wfp = img_fp.replace(suffix, '_pose') + prefix+ '.jpg'
+                #     cv2.imwrite(wfp, img_pose)
+                #     print('Dump to {}'.format(wfp))
+                if args.dump_depth:
+                    wfp = img_fp.replace(suffix, '_depth') + prefix+ '.png'
+                    # depths_img = get_depths_image(img_ori, vertices_lst, tri-1)  # python version
+                    depths_img = cget_depths_image(img_ori.copy(), vertices_lst, tri - 1)  # cython version
+                    cv2.imwrite(wfp, depths_img)
+                    print('Dump to {}'.format(wfp))
+                if args.dump_pncc:
+                    wfp =  img_fp.replace(suffix, '_pncc')+ prefix+ '.png'
+                    pncc_feature = cpncc(img_ori.copy(), vertices_lst, tri - 1)  # cython version
+                    cv2.imwrite(wfp, pncc_feature[:, :, ::-1])  # cv2.imwrite will swap RGB -> BGR
+                    print('Dump to {}'.format(wfp))
+                # set_trace()
+                if args.dump_res:
+                    note=prefix+" loss:{:.2f}".format(lossdict[j])
+                    # set_trace()
+                    draw_landmarks(img_ori.copy(), pts_res, wfp=img_fp.replace(suffix, prefix+'.jpg'), show_flg=args.show_flg, note =note)
+                    # draw_landmarks(img_cv, pts_res, wfp=img_fp.replace(suffix, prefix+'_cv.jpg'), show_flg=args.show_flg)
+
 
     
 
@@ -759,23 +813,23 @@ def main():
     # step3: data
     normalize = NormalizeGjz(mean=127.5, std=128)  # may need optimization
 
-    # train_dataset = DDFADataset(
-    #     root=args.root,
-    #     filelists=args.filelists_train,
-    #     param_fp=args.param_fp_train,
-    #     transform=transforms.Compose([ToTensorGjz(), normalize])
-    # )
-    # val_dataset = DDFADataset(
-    #     root=args.root,
-    #     filelists=args.filelists_val,
-    #     param_fp=args.param_fp_val,
-    #     transform=transforms.Compose([ToTensorGjz(), normalize])
-    # )
+    train_dataset = DDFADataset(
+        root=args.root,
+        filelists=args.filelists_train,
+        param_fp=args.param_fp_train,
+        transform=transforms.Compose([ToTensorGjz(), normalize])
+    )
+    val_dataset = DDFADataset(
+        root=args.root,
+        filelists=args.filelists_val,
+        param_fp=args.param_fp_val,
+        transform=transforms.Compose([ToTensorGjz(), normalize])
+    )
 
-    # train_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.workers,
-    #                           shuffle=True, pin_memory=True, drop_last=True)
-    # val_loader = DataLoader(val_dataset, batch_size=args.val_batch_size, num_workers=args.workers,
-    #                         shuffle=False, pin_memory=True, drop_last=True)
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.workers,
+                              shuffle=True, pin_memory=True, drop_last=True)
+    val_loader = DataLoader(val_dataset, batch_size=args.val_batch_size, num_workers=args.workers,
+                            shuffle=False, pin_memory=True, drop_last=True)
 
     # step4: run
     cudnn.benchmark = True
@@ -787,8 +841,8 @@ def main():
     if args.gbdt==1:
         # prepare_gbdt(train_loader, model, criterion, optimizer, args)
         # generate_gbdt_dataset(train_loader, model, criterion, optimizer, args)
-        # train_gbdt(train_loader, model, criterion, optimizer, args)
-        # refine_gbdt(train_loader, model, criterion, optimizer, args)
+        train_gbdt(train_loader, model, criterion, optimizer, args)
+        refine_gbdt(train_loader, model, criterion, optimizer, args)
         for epoch in range(args.start_epoch, args.epochs + 1):
             # adjust learning rate
             adjust_learning_rate(optimizer, epoch, args.milestones)
@@ -797,26 +851,29 @@ def main():
         
         base_alpha = 0.1
         # validate_gbdt(val_loader, model, criterion, args)
-        # transform=transforms.Compose([ToTensorGjz(), normalize])
-        plot_dataset = DDFADataset(
-            root=args.root,
-            filelists=args.filelists_val,
-            param_fp=args.param_fp_val, 
-            transform= transforms.Compose([ToTensorGjz()])
-        )
+        plot_result = 0
+        if plot_result:
+            plot_dataset = DDFAPlotDataset(
+                root=args.root,
+                filelists=args.filelists_val,
+                param_fp=args.param_fp_val, 
+                transform= transforms.Compose([ToTensorGjz()])
+            )
 
-        plot_loader = DataLoader(plot_dataset, batch_size=1, num_workers=args.workers,
-                            shuffle=False, pin_memory=True, drop_last=True)
-        args.transform = normalize
-        for use_gbdt in [0,1]:
-            for use_attack in [0,1]:
-                plot_gbdt(plot_loader, model, criterion, args, use_gbdt, use_attack)
-        print("with original model:")
-        # validate(val_loader, model, criterion, epoch, args)
-        # for epoch in range(0,4):
-        #     args.alpha += base_alpha
-        #     print("with gbdt model of alpha:"+str(args.alpha))
-        #     validate_gbdt(val_loader, model, criterion, args)
+            plot_loader = DataLoader(plot_dataset, batch_size=1, num_workers=args.workers,
+                                shuffle=True, pin_memory=True, drop_last=True)
+            args.transform = normalize
+            # for use_gbdt in [1,0]:
+            #     for use_attack in [1,0]:
+            use_gbdt = 1
+            use_attack = 1
+            plot_gbdt(plot_loader, model, criterion, args, use_gbdt, use_attack)
+            print("with original model:")
+            # validate(val_loader, model, criterion, epoch, args)
+            # for epoch in range(0,4):
+            #     args.alpha += base_alpha
+            #     print("with gbdt model of alpha:"+str(args.alpha))
+            #     validate_gbdt(val_loader, model, criterion, args)
 
 
     else:
