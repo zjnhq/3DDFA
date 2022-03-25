@@ -345,12 +345,16 @@ def train_gbdt(train_loader, model, criterion, optimizer, args):
     max_leaf_nodes = 63
     max_bins = 31
     end =  time.time()
-    for i in range(target_dim):
+    for i in range(12,target_dim):
         # print("training gbdt for target dim:"+str(i))
-        verbose = 0
+        verbose = 1
         if i%15==0:
             verbose=1
-        lightgbm = HistGradientBoostingRegressor(max_iter=num_init_trees, learning_rate=0.2, max_leaf_nodes=max_leaf_nodes, max_bins=max_bins, warm_start = False, verbose=verbose)
+        lr= 0.2
+        if i>11:
+            lr= 0.2 
+            num_init_trees = 50
+        lightgbm = HistGradientBoostingRegressor(max_iter=num_init_trees, learning_rate=lr, max_leaf_nodes=max_leaf_nodes, max_bins=max_bins, warm_start = False, verbose=verbose)
         # lightgbm = GradientBoostingRegressor(n_estimators=20, max_depth=6)
 
         lightgbm.fit(batched_mid_features, batched_target[:,i])
@@ -372,7 +376,7 @@ def refine_gbdt(train_loader, model, criterion, optimizer, args):
     print(lightgbms[0].get_params())
     # target_dim = 0
     end =  time.time()
-    for fileid in range(1, num_pkl_files):
+    for fileid in range(12, num_pkl_files):
         filename = './gbdt_feature/gbdt_feature' +str(fileid)+'.pkl'
         [batched_mid_features, batched_target] = pkl.load(open(filename,'rb'))
         logging.info("refine gbdt on feature file:"+filename)
@@ -435,8 +439,8 @@ class GBDT_Predictor:
             print('num_feat != self.rawfeature_index.shape[0] ')
         self.lightgbms = []
         for i in range(self.target_dim):
-            self.lightgbm = pkl.load(open(gbdt_param_filename+ '_ref' + str(i) + '.pkl','rb'))
-            # self.lightgbm = pkl.load(open(gbdt_param_filename+ str(i) + '.pkl','rb'))
+            # self.lightgbm = pkl.load(open(gbdt_param_filename+ '_ref' + str(i) + '.pkl','rb'))
+            self.lightgbm = pkl.load(open(gbdt_param_filename+ str(i) + '.pkl','rb'))
             self.lightgbms.append(self.lightgbm)
             # set_trace()
     def predict(self,input, mid_features):
@@ -491,7 +495,10 @@ def validate_gbdt(val_loader, model, criterion, args):
         output = model(input)
 
         gbdt_output = gbdt.predict(input, model.module.mid_features)
-        gbdt_output = output * (1- alpha) + gbdt_output* alpha
+        # gbdt_output = output * (1- alpha) + gbdt_output* alpha
+        gbdt_output[12:] = output[12:]#* (1- alpha) + gbdt_output[12:] * alpha
+        #GBDT seems to have better result in predicting R,t, than predicting component coefficients
+        
         
         loss = criterion(gbdt_output, target)
         losses_gbdt_original.append(loss.item())
@@ -521,7 +528,8 @@ def validate_gbdt(val_loader, model, criterion, args):
                 input.retain_grad()
                 output = model(input)    
             gbdt_output = gbdt.predict(input, model.module.mid_features)
-            # gbdt_output = output * (1- alpha) + gbdt_output * alpha    
+            #* (1- alpha) + gbdt_output * alpha    
+            gbdt_output[12:] = output[12:]#* (1- alpha) + gbdt_output[12:] * alpha
             loss = criterion(output, target)
             losses_cnn_attacked.append(loss.item())
             loss = criterion(gbdt_output, target)
@@ -544,7 +552,7 @@ def validate_gbdt(val_loader, model, criterion, args):
                  f'CNN Loss attacked {np.mean(losses_cnn_attacked)*100:.4f}\t')
     logging.info(f'GBDT Loss original {np.mean(losses_gbdt_original)*100:.4f}\t'
                  f'GBDT Loss attacked {np.mean(losses_gbdt_attacked)*100:.4f}\t')
-
+from copy import deepcopy
 def plot_gbdt(val_loader, model, criterion, args, use_gbdt, use_attack):
     
     alpha = args.alpha
@@ -568,9 +576,10 @@ def plot_gbdt(val_loader, model, criterion, args, use_gbdt, use_attack):
 
     tri = sio.loadmat('visualize/tri.mat')['tri']
     plot_num = 0
+    loss_for_dataset = dict()
     for i, (img, target, img_cv) in enumerate(val_loader):
         # set_trace()
-        if i>100 or plot_num>10:break
+        if i>1500 or plot_num>12:break
         
         input = args.transform(img.clone())
         prefix = '_orig'
@@ -583,24 +592,30 @@ def plot_gbdt(val_loader, model, criterion, args, use_gbdt, use_attack):
         # compute output
         outputdict = [0,0,0,0]
         lossdict = [0,0,0,0]
+        pdc_lossdict = [0,0,0,0]
         prefixdict = [0,0,0,0]
+        imgdict = [0,0,0,0]
         target.requires_grad = False
         target = target.cuda(non_blocking=True)
-        img_fp = "plot/save"+str(i)+'.jpg'
-        suffix = get_suffix(img_fp)
+        
         if use_attack==1:input.requires_grad = True
         output = model(input)
         loss = criterion(output, target)
+        # loss_pdc = criterion_pdc(output, target)
+
         testid = 0
-        outputdict[testid] = output.clone().detach()
+        outputdict[testid] = target.clone().squeeze().detach().cpu().numpy() 
+        #output.clone().squeeze().detach().cpu().numpy()
         lossdict[testid] = loss.item()
-        prefixdict[testid] = 'orig_cnn'
+        # pdc_lossdict[testid] = loss_pdc.item()
+        prefixdict[testid] = 'orig_gt'
 
         if use_gbdt==1: 
             testid+=1
-            output_gbdt = gbdt.predict(input, model.module.mid_features)
+            output_gbdt = gbdt.predict(input, model.module.mid_features).type(torch.cuda.FloatTensor)
+            # set_trace()
             loss_gbdt = criterion(output_gbdt, target)
-            outputdict[testid] = output_gbdt.clone().detach()
+            outputdict[testid] = output_gbdt.clone().squeeze().detach().cpu().numpy()
             lossdict[testid] += loss_gbdt.item()
             prefixdict[testid] = 'orig_gbdt'
 
@@ -609,7 +624,7 @@ def plot_gbdt(val_loader, model, criterion, args, use_gbdt, use_attack):
             attack_maxstepsize = 0.01#np.abs(input_original.cpu().numpy()).mean()*0.02
             input_upper_limit= input_original + attack_maxstepsize
             input_lower_limit = input_original - attack_maxstepsize
-            steps = 3
+            steps = 10
             attack_stepsize = attack_maxstepsize/steps
             # print("prediction before:"+str(output[0,-6:]))
             input.requires_grad = True
@@ -630,15 +645,15 @@ def plot_gbdt(val_loader, model, criterion, args, use_gbdt, use_attack):
             loss = criterion(output, target)
             losses_cnn_attacked.append(loss.item())
             testid +=1
-            outputdict[testid] = output.clone().detach()
+            outputdict[testid] = output.clone().squeeze().detach().cpu().numpy()
             lossdict[testid] += loss.item()
             prefixdict[testid] = 'attack_cnn'
 
             if use_gbdt==1: 
-                output_gbdt = gbdt.predict(input, model.module.mid_features)
+                output_gbdt = gbdt.predict(input, model.module.mid_features).type(torch.cuda.FloatTensor)
                 loss_gbdt = criterion(output_gbdt, target)
                 testid +=1
-                outputdict[testid] = output_gbdt.clone().detach()
+                outputdict[testid] = output_gbdt.clone().squeeze().detach().cpu().numpy()
                 lossdict[testid] += loss_gbdt.item()
                 prefixdict[testid] = 'attack_gbdt'
             # loss = criterion(gbdt_output, target)
@@ -647,39 +662,52 @@ def plot_gbdt(val_loader, model, criterion, args, use_gbdt, use_attack):
         print(prefixdict)
         print(lossdict)
         plot_this = False
-        if lossdict[1]< lossdict[0] and (lossdict[3]< lossdict[2]) and lossdict[2]<0.1 and lossdict[0]<0.1:
-            plot_this = True
-            plot_num +=1
-        else:
-            print("skip this pic")
+
+        # if lossdict[1]< (lossdict[0]) and (lossdict[3]< (lossdict[2])):
+        if lossdict[3]< (lossdict[2] * 0.5):
+            if lossdict[1]>20: #vdc loss
+                if lossdict[3]<40:
+                    # if lossdict[2] - lossdict[3]>0.02:
+                    plot_this = True
+                    plot_num +=1
+            else:
+                if lossdict[3]<0.03: #wpdc loss
+                    # if lossdict[2] - lossdict[3]>0.02:
+                    plot_this = True
+                    plot_num +=1
+
+        h,w,nc = img.shape[2], img.shape[3], img.shape[1]
+        img_ori = img.reshape(nc,h,w).permute(1,2,0).cpu().numpy() # 3 x H x W
+        img_ori = img_ori.astype(int) 
+        if use_attack ==1 :
+            img_attack = args.transform.reverse(input.detach())
+            img_attack = img_attack.reshape(nc,h,w).permute(1,2,0).cpu().numpy()#.permute(2,0,1)
+            img_attack=img_attack.astype(int)
+            img_attack[img_attack>255] =255
+            img_attack[img_attack<0] = 0
+
+        imgdict[0] = img_ori
+        imgdict[1] = img_ori
+        imgdict[2] = img_attack
+        imgdict[3] = img_attack
+        if not plot_this:print("skip this pic")
+        # set_trace()
         if plot_this:
+            img_fp = "plot/save"+str(plot_num)+'.jpg'
+            suffix = get_suffix(img_fp)
+            difference = np.abs(img_attack - img_ori).mean()
+            print("attack make difference of:"+str( difference)+" pixles")
+            pkl.dump([lossdict, difference],open('plot/loss'+str(plot_num)+'.pkl','wb'))
+            # loss_for_dataset[plot_num] = deepcopy(lossdict)
             for j in range(testid+1):
 
                 param = outputdict[j]
                 prefix = prefixdict[j]
-                param = param.squeeze().detach().cpu().numpy().flatten().astype(np.float32)
+                # param = param.squeeze().detach().cpu().numpy().flatten().astype(np.float32)
+                param = param.flatten().astype(np.float32)
+                img_ori = imgdict[j]
                 # 68 pts
-                h,w,nc = img.shape[2], img.shape[3], img.shape[1]
-                # set_trace()
-                if use_attack==0:
-                    img_ori = img.reshape(nc,h,w).permute(1,2,0).cpu().numpy() # 3 x H x W
-                else:
-                    img_attack = args.transform.reverse(input.detach())
-                    img_attack = img_attack.reshape(nc,h,w).permute(1,2,0).cpu().numpy()#.permute(2,0,1)
-                    img_attack=img_attack.astype(int)
-                    img_attack[img_attack>255] =255
-                    img_attack[img_attack<0] = 0
-
-                    img_ori= img_attack
-
-                img_ori = img.reshape(nc,h,w).permute(1,2,0).cpu().numpy() # 3 x H x W
-
-                img_ori = img_ori.astype(int) #.transpose(1,2,0)
-                # img_ori = img_cv
-
-                # bbox= [0, 0, img.shape[2], img.shape[3]]
-                # bbox = [rect.left(), rect.top(), rect.right(), rect.bottom()]
-                # set_trace()
+                
                 roi_box = [0, 0, img.shape[2], img.shape[3]] #parse_roi_box_from_bbox(bbox)
                 pts68 = predict_68pts(param, roi_box)
 
@@ -695,7 +723,7 @@ def plot_gbdt(val_loader, model, criterion, args, use_gbdt, use_attack):
                 Ps.append(P)
                 poses.append(pose)
 
-                ind=i
+                ind= plot_num
 
                 # dense face 3d vertices
                 if args.dump_ply or args.dump_vertex or args.dump_depth or args.dump_pncc or args.dump_obj:
@@ -706,10 +734,10 @@ def plot_gbdt(val_loader, model, criterion, args, use_gbdt, use_attack):
                 #     dump_to_ply(vertices, tri, fname)
                 # if args.dump_vertex:
                 #     dump_vertex(vertices, '{}_{}_{}.mat'.format(img_fp.replace(suffix, ''), ind, prefix))
-                # if args.dump_pts:
-                #     wfp = '{}_{}_{}.txt'.format(img_fp.replace(suffix, ''), ind, prefix)
-                #     np.savetxt(wfp, pts68, fmt='%.3f')
-                #     print('Save 68 3d landmarks to {}'.format(wfp))
+                if args.dump_pts:
+                    wfp = '{}_{}_{}.txt'.format(img_fp.replace(suffix, ''), ind, prefix)
+                    np.savetxt(wfp, pts68, fmt='%.3f')
+                    print('Save 68 3d landmarks to {}'.format(wfp))
                 # if args.dump_roi_box:
                 #     wfp = '{}_{}_{}.roibox'.format(img_fp.replace(suffix, ''), ind, prefix)
                 #     np.savetxt(wfp, roi_box, fmt='%.3f')
@@ -727,7 +755,7 @@ def plot_gbdt(val_loader, model, criterion, args, use_gbdt, use_attack):
                 #     colors = get_colors(img_ori, vertices)
                 #     write_obj_with_colors(wfp, vertices, tri, colors)
                 #     print('Dump obj with sampled texture to {}'.format(wfp))
-                ind += 1
+                # ind += 1
 
                 # if args.dump_pose:
                 #     # P, pose = parse_pose(param)  # Camera matrix (without scale), and pose (yaw, pitch, roll, to verify)
@@ -746,15 +774,14 @@ def plot_gbdt(val_loader, model, criterion, args, use_gbdt, use_attack):
                     pncc_feature = cpncc(img_ori.copy(), vertices_lst, tri - 1)  # cython version
                     cv2.imwrite(wfp, pncc_feature[:, :, ::-1])  # cv2.imwrite will swap RGB -> BGR
                     print('Dump to {}'.format(wfp))
-                # set_trace()
+                
                 if args.dump_res:
                     note=prefix+" loss:{:.2f}".format(lossdict[j])
                     # set_trace()
-                    draw_landmarks(img_ori.copy(), pts_res, wfp=img_fp.replace(suffix, prefix+'.jpg'), show_flg=args.show_flg, note =note)
+                    draw_landmarks(img_ori.copy(), pts_res, wfp=img_fp.replace(suffix, prefix+'.jpg'), show_flg=args.show_flg)
                     # draw_landmarks(img_cv, pts_res, wfp=img_fp.replace(suffix, prefix+'_cv.jpg'), show_flg=args.show_flg)
+                
 
-
-    
 
 def main():
     parse_args()  # parse global argsl
@@ -841,8 +868,8 @@ def main():
     if args.gbdt==1:
         # prepare_gbdt(train_loader, model, criterion, optimizer, args)
         # generate_gbdt_dataset(train_loader, model, criterion, optimizer, args)
-        train_gbdt(train_loader, model, criterion, optimizer, args)
-        refine_gbdt(train_loader, model, criterion, optimizer, args)
+        # train_gbdt(train_loader, model, criterion, optimizer, args)
+        # refine_gbdt(train_loader, model, criterion, optimizer, args)
         for epoch in range(args.start_epoch, args.epochs + 1):
             # adjust learning rate
             adjust_learning_rate(optimizer, epoch, args.milestones)
@@ -850,7 +877,7 @@ def main():
             # train for one epoch
         
         base_alpha = 0.1
-        # validate_gbdt(val_loader, model, criterion, args)
+        validate_gbdt(val_loader, model, criterion, args)
         plot_result = 0
         if plot_result:
             plot_dataset = DDFAPlotDataset(
@@ -867,6 +894,12 @@ def main():
             #     for use_attack in [1,0]:
             use_gbdt = 1
             use_attack = 1
+            # criterions = []
+            # criterions.append(WPDCLoss(opt_style=args.opt_style).cuda())
+            
+            # criterions.append(VDCLoss(opt_style=args.opt_style).cuda())
+            # criterions.append(nn.MSELoss(size_average=args.size_average).cuda())
+            # criterion = VDCLoss(opt_style=args.opt_style).cuda()
             plot_gbdt(plot_loader, model, criterion, args, use_gbdt, use_attack)
             print("with original model:")
             # validate(val_loader, model, criterion, epoch, args)

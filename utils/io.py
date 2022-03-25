@@ -42,9 +42,9 @@ def _dump(wfp, obj):
 
 def _load_tensor(fp, mode='cpu'):
     if mode.lower() == 'cpu':
-        return torch.from_numpy(_load(fp))
+        return torch.from_numpy(_load(fp)).type(torch.FloatTensor)
     elif mode.lower() == 'gpu':
-        return torch.from_numpy(_load(fp)).cuda()
+        return torch.from_numpy(_load(fp)).type(torch.FloatTensor).cuda()
 
 
 def _tensor_to_cuda(x):
