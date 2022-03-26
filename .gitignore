@@ -38,3 +38,11 @@ samples/*cnn.jpg
 samples/*gbdt.png
 samples/*cnn.png
 plot/*
+important_feature.pkl
+samples/test1_3DDFA.jpg
+samples/test1_3DDFA_GBDT.jpg
+samples/test1_depth.png
+samples/test1_pncc.png
+samples/test1_pose.jpg
+c++/vsbuild/*
+

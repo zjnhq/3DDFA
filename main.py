@@ -45,7 +45,10 @@ def main(args):
     model_dict = model.state_dict()
     # because the model is trained by multiple gpus, prefix module should be removed
     for k in checkpoint.keys():
-        model_dict[k.replace('module.', '')] = checkpoint[k]
+        kc = k.replace('module.', '')
+        if kc in ['fc_param.bias', 'fc_param.weight']:
+            model_dict[kc.replace('_param', '')] = checkpoint[k]
+        model_dict[kc] = checkpoint[k]
     model.load_state_dict(model_dict)
     if args.mode == 'gpu':
         cudnn.benchmark = True
@@ -175,36 +178,36 @@ def main(args):
             Ps.append(P)
             poses.append(pose)
 
-            # dense face 3d vertices
-            if args.dump_ply or args.dump_vertex or args.dump_depth or args.dump_pncc or args.dump_obj:
-                vertices = predict_dense(param, roi_box)
-                vertices_lst.append(vertices)
-            if args.dump_ply:
-                dump_to_ply(vertices, tri, '{}_{}.ply'.format(img_fp.replace(suffix, ''), ind))
-            if args.dump_vertex:
-                dump_vertex(vertices, '{}_{}.mat'.format(img_fp.replace(suffix, ''), ind))
-            if args.dump_pts:
-                wfp = '{}_{}.txt'.format(img_fp.replace(suffix, ''), ind)
-                np.savetxt(wfp, pts68, fmt='%.3f')
-                print('Save 68 3d landmarks to {}'.format(wfp))
-            if args.dump_roi_box:
-                wfp = '{}_{}.roibox'.format(img_fp.replace(suffix, ''), ind)
-                np.savetxt(wfp, roi_box, fmt='%.3f')
-                print('Save roi box to {}'.format(wfp))
-            if args.dump_paf:
-                wfp_paf = '{}_{}_paf.jpg'.format(img_fp.replace(suffix, ''), ind)
-                wfp_crop = '{}_{}_crop.jpg'.format(img_fp.replace(suffix, ''), ind)
-                paf_feature = gen_img_paf(img_crop=img, param=param, kernel_size=args.paf_size)
+            # # dense face 3d vertices
+            # if args.dump_ply or args.dump_vertex or args.dump_depth or args.dump_pncc or args.dump_obj:
+            #     vertices = predict_dense(param, roi_box)
+            #     vertices_lst.append(vertices)
+            # if args.dump_ply:
+            #     dump_to_ply(vertices, tri, '{}_{}.ply'.format(img_fp.replace(suffix, ''), ind))
+            # if args.dump_vertex:
+            #     dump_vertex(vertices, '{}_{}.mat'.format(img_fp.replace(suffix, ''), ind))
+            # if args.dump_pts:
+            #     wfp = '{}_{}.txt'.format(img_fp.replace(suffix, ''), ind)
+            #     np.savetxt(wfp, pts68, fmt='%.3f')
+            #     print('Save 68 3d landmarks to {}'.format(wfp))
+            # if args.dump_roi_box:
+            #     wfp = '{}_{}.roibox'.format(img_fp.replace(suffix, ''), ind)
+            #     np.savetxt(wfp, roi_box, fmt='%.3f')
+            #     print('Save roi box to {}'.format(wfp))
+            # if args.dump_paf:
+            #     wfp_paf = '{}_{}_paf.jpg'.format(img_fp.replace(suffix, ''), ind)
+            #     wfp_crop = '{}_{}_crop.jpg'.format(img_fp.replace(suffix, ''), ind)
+            #     paf_feature = gen_img_paf(img_crop=img, param=param, kernel_size=args.paf_size)
 
-                cv2.imwrite(wfp_paf, paf_feature)
-                cv2.imwrite(wfp_crop, img)
-                print('Dump to {} and {}'.format(wfp_crop, wfp_paf))
-            if args.dump_obj:
-                wfp = '{}_{}.obj'.format(img_fp.replace(suffix, ''), ind)
-                colors = get_colors(img_ori, vertices)
-                write_obj_with_colors(wfp, vertices, tri, colors)
-                print('Dump obj with sampled texture to {}'.format(wfp))
-            ind += 1
+            #     cv2.imwrite(wfp_paf, paf_feature)
+            #     cv2.imwrite(wfp_crop, img)
+            #     print('Dump to {} and {}'.format(wfp_crop, wfp_paf))
+            # if args.dump_obj:
+            #     wfp = '{}_{}.obj'.format(img_fp.replace(suffix, ''), ind)
+            #     colors = get_colors(img_ori, vertices)
+            #     write_obj_with_colors(wfp, vertices, tri, colors)
+            #     print('Dump obj with sampled texture to {}'.format(wfp))
+            # ind += 1
 
         if args.dump_pose:
             # P, pose = parse_pose(param)  # Camera matrix (without scale), and pose (yaw, pitch, roll, to verify)

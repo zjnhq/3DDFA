@@ -345,9 +345,9 @@ def train_gbdt(train_loader, model, criterion, optimizer, args):
     max_leaf_nodes = 63
     max_bins = 31
     end =  time.time()
-    for i in range(12,target_dim):
+    for i in range(1,target_dim):
         # print("training gbdt for target dim:"+str(i))
-        verbose = 1
+        # verbose = 1
         if i%15==0:
             verbose=1
         lr= 0.2
@@ -376,7 +376,7 @@ def refine_gbdt(train_loader, model, criterion, optimizer, args):
     print(lightgbms[0].get_params())
     # target_dim = 0
     end =  time.time()
-    for fileid in range(12, num_pkl_files):
+    for fileid in range(1, num_pkl_files):
         filename = './gbdt_feature/gbdt_feature' +str(fileid)+'.pkl'
         [batched_mid_features, batched_target] = pkl.load(open(filename,'rb'))
         logging.info("refine gbdt on feature file:"+filename)
@@ -757,12 +757,12 @@ def plot_gbdt(val_loader, model, criterion, args, use_gbdt, use_attack):
                 #     print('Dump obj with sampled texture to {}'.format(wfp))
                 # ind += 1
 
-                # if args.dump_pose:
-                #     # P, pose = parse_pose(param)  # Camera matrix (without scale), and pose (yaw, pitch, roll, to verify)
-                #     img_pose = plot_pose_box(img_ori, Ps, pts_res)
-                #     wfp = img_fp.replace(suffix, '_pose') + prefix+ '.jpg'
-                #     cv2.imwrite(wfp, img_pose)
-                #     print('Dump to {}'.format(wfp))
+                if args.dump_pose:
+                    # P, pose = parse_pose(param)  # Camera matrix (without scale), and pose (yaw, pitch, roll, to verify)
+                    img_pose = plot_pose_box(img_ori, Ps, pts_res)
+                    wfp = img_fp.replace(suffix, '_pose') + prefix+ '.jpg'
+                    cv2.imwrite(wfp, img_pose)
+                    print('Dump to {}'.format(wfp))
                 if args.dump_depth:
                     wfp = img_fp.replace(suffix, '_depth') + prefix+ '.png'
                     # depths_img = get_depths_image(img_ori, vertices_lst, tri-1)  # python version
@@ -832,7 +832,23 @@ def main():
 
             checkpoint = torch.load(args.resume, map_location=lambda storage, loc: storage)['state_dict']
             # checkpoint = torch.load(args.resume)['state_dict']
-            model.load_state_dict(checkpoint)
+            # model.load_state_dict(checkpoint)
+
+
+            # checkpoint_fp = 'weights/mb_1.p'
+            # arch = 'mobilenet_1'
+            # checkpoint = torch.load(checkpoint_fp, map_location=lambda storage, loc: storage)['state_dict']
+            # model = getattr(mobilenet_v1, arch)(num_classes=62)  # 62 = 12(pose) + 40(shape) +10(expression)
+
+            model_dict = model.state_dict()
+            # because the model is trained by multiple gpus, prefix module should be removed
+            for kc in checkpoint.keys():
+                # kc = k.replace('module.', '')
+                if kc in model_dict.keys():
+                    model_dict[kc] = checkpoint[kc]
+                if kc in ['fc_param.bias', 'fc_param.weight']:
+                    model_dict[kc.replace('_param', '')] = checkpoint[kc]
+            model.load_state_dict(model_dict)
 
         else:
             logging.info(f'=> no checkpoint found at {args.resume}')
@@ -866,9 +882,9 @@ def main():
 
     # set_trace()
     if args.gbdt==1:
-        # prepare_gbdt(train_loader, model, criterion, optimizer, args)
-        # generate_gbdt_dataset(train_loader, model, criterion, optimizer, args)
-        # train_gbdt(train_loader, model, criterion, optimizer, args)
+        prepare_gbdt(train_loader, model, criterion, optimizer, args)
+        generate_gbdt_dataset(train_loader, model, criterion, optimizer, args)
+        train_gbdt(train_loader, model, criterion, optimizer, args)
         # refine_gbdt(train_loader, model, criterion, optimizer, args)
         for epoch in range(args.start_epoch, args.epochs + 1):
             # adjust learning rate

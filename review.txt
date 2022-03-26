@@ -1,3 +1,13 @@
 
 
-This paper presents a study of the communication complexity for distributed optimization with quantization.
+This paper presents a study of the communication complexity for distributed optimization with quantization. The authors proposed sparse dithering, which applies quantization on top-k elements, and the paper describes the coding length for such algorithms.
+
+From my perspective, the main contribution of the paper is make a tighter estimate of the number of bins per iteration for quantization of sparsification of the gradient vector. The spherical compression is also very novel, and get a even better complexity although I am not sure about its practical usage, since the coding seems to be really time consuming. 
+
+I am curious about one question, maybe I did not find it. The communication complexity depends on constant specific to the optimization problem. If this distributed optimization problem was to be put aside, it should be a standard noisy coding problem in communication, as it has no other information provided? It should a coding problem to reduce compression STD. Is there some reference in this area that should be mentioned in paper?
+
+minor : what's the difference between Definition 2.2 and 2.3? I have difficulty to see it.
+
+Regarding implementation: page 22, line 23 mentioned a number of log(A^d_n) bits for position vector, is it practical to implement such a coding and decoding algorithm for this vector? I myself cannot think of a straightforward way.
+
+In general, I think the paper provides good enough analysis for top-k selection and random/deterministic quantization which are quite common in the area. I am no expert in probability theory, which I believed to be heavily used in the paper
