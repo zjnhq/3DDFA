@@ -46,3 +46,6 @@ samples/test1_pncc.png
 samples/test1_pose.jpg
 c++/vsbuild/*
 
+TDDFA/*
+plot2/*
+important_feature*.pkl

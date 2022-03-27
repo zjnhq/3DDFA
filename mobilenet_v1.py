@@ -90,42 +90,122 @@ class MobileNet(nn.Module):
             elif isinstance(m, nn.BatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
-        self.midfeature_grad = False
+        self.feature_grad = False
 
+    # def forward(self, x):
+    #     x = self.conv1(x)
+    #     x = self.bn1(x)
+    #     x = self.relu(x)
+    #     # set_trace()
+
+    #     x = self.dw2_1(x)
+    #     x = self.dw2_2(x)
+    #     x = self.dw3_1(x)
+    #     x = self.dw3_2(x)
+    #     x = self.dw4_1(x)
+    #     x = self.dw4_2(x)
+    #     x = self.dw5_1(x)
+    #     x = self.dw5_2(x)
+    #     x = self.dw5_3(x)
+    #     x = self.dw5_4(x)
+    #     x = self.dw5_5(x)
+    #     # x = self.dw5_6(x)
+        
+    #     self.mid_features = self.dw5_6(x)#.cpu().detach().numpy()
+    #     if self.midfeature_grad:
+    #         self.mid_features.retain_grad()
+    #     else:
+    #         self.mid_features.clone().detach()
+    #     x2 = self.dw6(self.mid_features)
+
+    #     x2 = self.avgpool(x2)
+    #     x2 = x2.view(x2.size(0), -1)
+
+    #     x2 = self.fc(x2)
+
+    #     return x2
+
+    def SetFeatureLayers(self, feature_layers = [5,12]):
+        if len(feature_layers)==2:
+            self.low_features_layer = min(feature_layers[0], feature_layers[1])
+            self.mid_features_layer = max(feature_layers[0], feature_layers[1])
+        if len(feature_layers)==1:
+            self.mid_features_layer = feature_layers[0]
+            self.low_features_layer = - 1000
+    def store_features(self, x):
+        # size_d = x.size()[1] * x.size()[2] * x.size()[3]
+        # if size_d
+        if self.feature_layer == self.mid_features_layer:
+            self.mid_features = x#.cpu().detach().numpy()
+            if self.feature_grad:
+                self.mid_features.retain_grad()
+            else:
+                self.mid_features =x.clone().detach()
+
+        if self.feature_layer == self.low_features_layer:
+            self.low_features = x#.cpu().detach().numpy()
+            if self.feature_grad:
+                self.low_features.retain_grad()
+            else:
+                self.low_features =x.clone().detach()
+        # low_features_layer
     def forward(self, x):
+        self.feature_layer = 0
+        self.store_features(x)
         x = self.conv1(x)
         x = self.bn1(x)
+        self.feature_layer = 1
+        self.store_features(x)
         x = self.relu(x)
-        # set_trace()
-
+        self.feature_layer = 2
+        self.store_features(x)
         x = self.dw2_1(x)
+        self.feature_layer = 3
+        self.store_features(x)
         x = self.dw2_2(x)
+        self.feature_layer = 4
+        self.store_features(x)
         x = self.dw3_1(x)
+        self.feature_layer = 5
+        self.store_features(x)
         x = self.dw3_2(x)
+        self.feature_layer = 6
+        self.store_features(x)
         x = self.dw4_1(x)
+        self.feature_layer = 7
+        self.store_features(x)
         x = self.dw4_2(x)
+        self.feature_layer = 8
+        self.store_features(x)
         x = self.dw5_1(x)
+        self.feature_layer = 9
+        self.store_features(x)
         x = self.dw5_2(x)
+        self.feature_layer = 10
+        self.store_features(x)
         x = self.dw5_3(x)
+        self.feature_layer = 11
+        self.store_features(x)
         x = self.dw5_4(x)
+        self.feature_layer = 12
+        self.store_features(x)
         x = self.dw5_5(x)
-        # x = self.dw5_6(x)
-        
-        self.mid_features = self.dw5_6(x)#.cpu().detach().numpy()
-        if self.midfeature_grad:
-            self.mid_features.retain_grad()
-        else:
-            self.mid_features.clone().detach()
-        x2 = self.dw6(self.mid_features)
+        self.feature_layer = 13
+        self.store_features(x)
+        self.x = self.dw5_6(x)#.cpu().detach().numpy()
+        self.feature_layer = 14
+        self.store_features(x)
+        x = self.dw6(self.x)
+        self.feature_layer = 15
+        self.store_features(x)
+        x = self.avgpool(x)
+        x = x.view(x.size(0), -1)
 
-        x2 = self.avgpool(x2)
-        x2 = x2.view(x2.size(0), -1)
+        x = self.fc(x)
 
-        x2 = self.fc(x2)
-
-        return x2
+        return x
     def SetMidfeatureNeedGrad(self, MidfeatureNeedGrad=False):
-        self.midfeature_grad = MidfeatureNeedGrad
+        self.feature_grad = MidfeatureNeedGrad
 
 
 def mobilenet(widen_factor=1.0, num_classes=1000):

@@ -25,7 +25,7 @@ iris = load_iris()
 # Display the decision functions of trees trained on all pairs of features.
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.tree import DecisionTreeClassifier
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from gradient_boosting import HistGradientBoostingClassifier
 # Parameters
 n_classes = 3
@@ -97,15 +97,21 @@ for fig_id in range(2):
 	plt.tight_layout()
 	_ = plt.axis("tight")
 savefile = 'paper/iris_example'+str(fig_id)+'.pdf'
-plt.savefig(savefile, dpi=100)
+# plt.savefig(savefile, dpi=100)
 
 # %%
 # Display the structure of a single decision tree trained on all the features
 # together.
-# from sklearn.tree import plot_tree
-
-# plt.figure()
-# clf = HistGradientBoostingClassifier().fit(iris.data, iris.target)
-# # plot_tree(clf, filled=False)
-# plt.title("Decision tree trained on all the iris features")
+from sklearn.tree import plot_tree
+import pickle as pkl
+plt.figure()
+fileid= 3
+filename = './gbdt_feature/gbdt_feature' +str(fileid)+'.pkl'
+[X, y] = pkl.load(open(filename,'rb'))
+N = 500
+X=X[:N]
+y=y[:N,-1]
+clf = DecisionTreeRegressor(max_depth=3).fit(X, y)
+plot_tree(clf, label= 'all', filled=True, fontsize=10)
+plt.title("Decision tree for predicting coefficient of an expression component")
 plt.show()
