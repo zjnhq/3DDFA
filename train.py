@@ -207,6 +207,7 @@ def prepare_gbdt(train_loader, model, criterion, optimizer, args):
     mid_features = 0 
     target_dim = 0
     model.eval()
+    model.module.SetMidfeatureNeedGrad(True)
     model.module.SetFeatureLayers(args.feature_layers)
     for i, (input, target) in enumerate(train_loader):
         
@@ -254,8 +255,13 @@ def prepare_gbdt(train_loader, model, criterion, optimizer, args):
     feature_importance = batched_mid_features.mean(axis=0)
     num_feat = int(min(rawfeature_dim/8, midfeature_dim/4))
     num_feat = int(min(min(rawfeature_dim, midfeature_dim), 4096))
-    important_rawfeature = np.argpartition(feature_importance[:rawfeature_dim], num_feat)[: num_feat]
-    important_midfeature = np.argpartition(feature_importance[rawfeature_dim:], num_feat)[: num_feat]
+    select_small = 1
+    if select_small==1:
+        important_rawfeature = np.argpartition(feature_importance[:rawfeature_dim], num_feat)[: num_feat]
+        important_midfeature = np.argpartition(feature_importance[rawfeature_dim:], num_feat)[: num_feat]
+    else:
+        important_rawfeature = np.argpartition(feature_importance[:rawfeature_dim], -num_feat)[-num_feat:]
+        important_midfeature = np.argpartition(feature_importance[rawfeature_dim:], -num_feat)[-num_feat:]
     # important_midfeature = important_midfeature + rawfeature_dim
     # important_rawfeature = np.argpartition(feature_importance, - num_feat)[- num_feat:]
     # important_feature= [important_rawfeature, important_midfeature]
@@ -504,7 +510,7 @@ def validate_gbdt(val_loader, model, criterion, args):
         if use_attack==1:input.requires_grad = True
         output = model(input)
 
-        gbdt_output = gbdt.predict(input, model.module.mid_features)
+        gbdt_output = gbdt.predict(model.module.low_features, model.module.mid_features)
         # gbdt_output = output * (1- alpha) + gbdt_output* alpha
         gbdt_output[12:] = output[12:]#* (1- alpha) + gbdt_output[12:] * alpha
         #GBDT seems to have better result in predicting R,t, than predicting component coefficients
@@ -535,7 +541,7 @@ def validate_gbdt(val_loader, model, criterion, args):
                 input.requires_grad= True
                 input.retain_grad()
                 output = model(input)    
-            gbdt_output = gbdt.predict(input, model.module.mid_features)
+            gbdt_output = gbdt.predict(model.module.low_features, model.module.mid_features)
             #* (1- alpha) + gbdt_output * alpha    
             gbdt_output[12:] = output[12:]#* (1- alpha) + gbdt_output[12:] * alpha
             loss = criterion(output, target)
@@ -900,22 +906,22 @@ def main():
 
     # set_trace()
     if args.gbdt==1:
-        for feature_layers in [[6,12],[8,12], [6, 14], [8, 14], [10,14], [12,15]]:
-            try:
-                args.feature_layers = feature_layers
+        for feature_layers in [ [8,15], [12,15], [6,15]]:
+            # try:
+            args.feature_layers = feature_layers
 
-                args.layer_spec_suffix ='_layer'+ str(args.feature_layers[0])+'_'+str(args.feature_layers[1])
-                logging.info("start testing layer "+args.layer_spec_suffix)
-                prepare_gbdt(train_loader, model, criterion, optimizer, args)
-                generate_gbdt_dataset(train_loader, model, criterion, optimizer, args)
-                logging.info("start training GBDT on layer "+args.layer_spec_suffix)
-                train_gbdt(train_loader, model, criterion, optimizer, args)
-                # refine_gbdt(train_loader, model, criterion, optimizer, args)
-                logging.info("start validating layer "+args.layer_spec_suffix)
-                validate_gbdt(val_loader, model, criterion, args)
-                logging.info("end validating layer "+args.layer_spec_suffix)
-            except:
-                logging.info("some error happened")
+            args.layer_spec_suffix ='_layer'+ str(args.feature_layers[0])+'_'+str(args.feature_layers[1])
+            logging.info("start generating feature from layer "+args.layer_spec_suffix)
+            prepare_gbdt(train_loader, model, criterion, optimizer, args)
+            generate_gbdt_dataset(train_loader, model, criterion, optimizer, args)
+            logging.info("start training GBDT on layer "+args.layer_spec_suffix)
+            train_gbdt(train_loader, model, criterion, optimizer, args)
+            # refine_gbdt(train_loader, model, criterion, optimizer, args)
+            logging.info("start validating layer "+args.layer_spec_suffix)
+            validate_gbdt(val_loader, model, criterion, args)
+            logging.info("end validating layer "+args.layer_spec_suffix)
+            # except:
+            #     logging.info("some error happened")
         plot_result = 0
         if plot_result:
             plot_dataset = DDFAPlotDataset(

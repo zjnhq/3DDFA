@@ -1,0 +1,6 @@
+
+
+[2022-03-28 01:13:54,991] [p28016] [D:\code\face\3DDFA\train.py:559] [INFO] _layer0_12
+[2022-03-28 01:13:54,992] [p28016] [D:\code\face\3DDFA\train.py:560] [INFO] alpha[0.6] Time 100.808 Val: [1611 /1612]   CNN Loss original 6.2887        CNN Loss attacked 9.5472
+
+[2022-03-28 01:13:54,993] [p28016] [D:\code\face\3DDFA\train.py:563] [INFO] GBDT Loss original 5.9841   GBDT Loss attacked 8.2710
