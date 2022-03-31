@@ -15,16 +15,16 @@ from libc.stdlib cimport malloc, free, qsort
 from libc.string cimport memcpy
 from numpy.math cimport INFINITY
 
-from .common cimport X_BINNED_DTYPE_C
-from .common cimport Y_DTYPE_C
-from .common cimport hist_struct
-from .common import HISTOGRAM_DTYPE
-from .common cimport BITSET_INNER_DTYPE_C
-from .common cimport BITSET_DTYPE_C
-from .common cimport MonotonicConstraint
-from ._bitset cimport init_bitset
-from ._bitset cimport set_bitset
-from ._bitset cimport in_bitset
+from sklearn.ensemble._hist_gradient_boosting.common cimport X_BINNED_DTYPE_C
+from sklearn.ensemble._hist_gradient_boosting.common cimport Y_DTYPE_C
+from sklearn.ensemble._hist_gradient_boosting.common cimport hist_struct
+from sklearn.ensemble._hist_gradient_boosting.common import HISTOGRAM_DTYPE
+from sklearn.ensemble._hist_gradient_boosting.common cimport BITSET_INNER_DTYPE_C
+from sklearn.ensemble._hist_gradient_boosting.common cimport BITSET_DTYPE_C
+from sklearn.ensemble._hist_gradient_boosting.common cimport MonotonicConstraint
+from sklearn.ensemble._hist_gradient_boosting._bitset cimport init_bitset
+from sklearn.ensemble._hist_gradient_boosting._bitset cimport set_bitset
+from sklearn.ensemble._hist_gradient_boosting._bitset cimport in_bitset
 
 np.import_array()
 
@@ -46,7 +46,7 @@ cdef struct split_info_struct:
     Y_DTYPE_C value_right
     unsigned char is_categorical
     BITSET_DTYPE_C left_cat_bitset
-    unsigned int split_motive
+    unsigned int split_conservative
 
 
 # used in categorical splits for sorting categories by increasing values of
@@ -98,7 +98,7 @@ class SplitInfo:
                  missing_go_to_left, sum_gradient_left, sum_hessian_left,
                  sum_gradient_right, sum_hessian_right, n_samples_left,
                  n_samples_right, value_left, value_right,
-                 is_categorical, left_cat_bitset):
+                 is_categorical, left_cat_bitset, split_conservative):
         self.gain = gain
         self.feature_idx = feature_idx
         self.bin_idx = bin_idx
@@ -113,6 +113,7 @@ class SplitInfo:
         self.value_right = value_right
         self.is_categorical = is_categorical
         self.left_cat_bitset = left_cat_bitset
+        self.split_conservative = split_conservative
 
 
 @cython.final
@@ -417,6 +418,7 @@ cdef class Splitter:
             const Y_DTYPE_C value,
             const Y_DTYPE_C lower_bound=-INFINITY,
             const Y_DTYPE_C upper_bound=INFINITY,
+            unsigned int split_conservative = 0,
             ):
         """For each feature, find the best bin to split on at a given node.
 
@@ -449,6 +451,8 @@ cdef class Splitter:
         upper_bound : float
             Upper bound for the children values for respecting the monotonic
             constraints.
+        split_conservative : uint
+            equals 1 if need conservative split
 
         Returns
         -------
@@ -504,7 +508,8 @@ cdef class Splitter:
                         feature_idx, has_missing_values[feature_idx],
                         histograms, n_samples, sum_gradients, sum_hessians,
                         value, monotonic_cst[feature_idx],
-                        lower_bound, upper_bound, &split_infos[feature_idx])
+                        lower_bound, upper_bound, 
+                        &split_infos[feature_idx], split_conservative)
 
                     if has_missing_values[feature_idx]:
                         # We need to explore both directions to check whether
@@ -514,7 +519,8 @@ cdef class Splitter:
                             feature_idx, histograms, n_samples,
                             sum_gradients, sum_hessians,
                             value, monotonic_cst[feature_idx],
-                            lower_bound, upper_bound, &split_infos[feature_idx])
+                            lower_bound, upper_bound, 
+                            &split_infos[feature_idx], split_conservative)
 
             # then compute best possible split among all features
             best_feature_idx = self._find_best_feature_to_split_helper(
@@ -536,7 +542,7 @@ cdef class Splitter:
             split_info.value_right,
             split_info.is_categorical,
             None,  # left_cat_bitset will only be set if the split is categorical
-            split_info.split_motive,
+            split_conservative,
         )
         # Only set bitset if the split is categorical
         if split_info.is_categorical:
@@ -572,7 +578,7 @@ cdef class Splitter:
             Y_DTYPE_C lower_bound,
             Y_DTYPE_C upper_bound,
             split_info_struct * split_info,
-            unsigned int split_motive) nogil:  # OUT
+            unsigned int split_conservative) nogil:  # OUT
         """Find best bin to split on for a given feature.
 
         Splits that do not satisfy the splitting constraints
@@ -606,21 +612,22 @@ cdef class Splitter:
             unsigned int best_bin_idx
             unsigned int best_n_samples_left
             Y_DTYPE_C best_robustness_score = -1
-            Y_DTYPE_C last_gain = -1
-            Y_DTYPE_C next_gain = -1  # make a Conservative split if: gain >>> last_gain (shifting left for one bin )
+            Y_DTYPE_C best_gain = -1
+            # Y_DTYPE_C next_gain = -1  # make a Conservative split if: gain >>> last_gain (shifting left for one bin )
             # and gain > next_gain (shifting right)
+            unsigned int partial_gain = split_conservative
 
         sum_gradient_left, sum_hessian_left = 0., 0.
         n_samples_left = 0
 
         loss_current_node = _loss_from_value(value, sum_gradients)
 
-        partial_gain = 0 # Gain = (left_gain + right_gain) - gain
-        start_bin_idx = 0 
-        if split_motive:
-            partial_gain = 1 # Gain = max(left_gain, right_gain)
-            start_bin_idx = int(end / 3)
-        for bin_idx in range(start_bin_idx, end):
+        # partial_gain = 0 # Gain = (left_gain + right_gain) - gain
+        # start_bin_idx = 0 
+        if split_conservative:
+            # partial_gain = 1 # Gain = max(left_gain, right_gain)
+            bin_idx = end / 2
+        while bin_idx < end:
             n_samples_left += histograms[feature_idx, bin_idx].count
             n_samples_right = n_samples_ - n_samples_left
 
@@ -654,19 +661,21 @@ cdef class Splitter:
                                upper_bound,
                                self.l2_regularization, partial_gain)
 
-            if gain > best_gain and gain > self.min_gain_to_split:
-                found_better_split = True
-                split_motive = 0 #default split motive: find an optimal gain
-                best_gain = gain
-            robustness_score = (gain - last_gain) * n_samples_left / histograms[feature_idx, bin_idx].count
-            if robustness_score > and split 
-                found_better_split = True
-                split_motive = 1 #conservative split motive: find a good enough subset, and if split moves right may 
-                best_robustness_score = robustness_score
-                best_bin_idx = bin_idx
-                best_sum_gradient_left = sum_gradient_left
-                best_sum_hessian_left = sum_hessian_left
-                best_n_samples_left = n_samples_left
+            if gain > best_gain:
+                if gain > self.min_gain_to_split:
+                    found_better_split = True
+                    # split_conservative = 0 #default split motive: find an optimal gain
+                    best_gain = gain
+                    # found_better_split = True
+                    # split_conservative = 1 #conservative split motive: find a good enough subset, and if split moves right may 
+                    # best_robustness_score = robustness_score
+                    best_bin_idx = bin_idx
+                    best_sum_gradient_left = sum_gradient_left
+                    best_sum_hessian_left = sum_hessian_left
+                    best_n_samples_left = n_samples_left
+            # robustness_score = (gain - last_gain) * n_samples_left / histograms[feature_idx, bin_idx].count
+            # if robustness_score > and split 
+            
 
         if found_better_split:
             split_info.gain = best_gain
@@ -700,7 +709,8 @@ cdef class Splitter:
             signed char monotonic_cst,
             Y_DTYPE_C lower_bound,
             Y_DTYPE_C upper_bound,
-            split_info_struct * split_info) nogil:  # OUT
+            split_info_struct * split_info,
+            unsigned int split_conservative) nogil:  # OUT
         """Find best bin to split on for a given feature.
 
         Splits that do not satisfy the splitting constraints
@@ -738,6 +748,8 @@ cdef class Splitter:
         n_samples_right = 0
 
         loss_current_node = _loss_from_value(value, sum_gradients)
+        if split_conservative:
+            
 
         for bin_idx in range(start, -1, -1):
             n_samples_right += histograms[feature_idx, bin_idx + 1].count
@@ -766,13 +778,16 @@ cdef class Splitter:
                 # won't get any better (hessians are > 0 since loss is convex)
                 break
 
+            partial_gain = 0
+            if split_conservative:
+                partial_gain = 1
             gain = _split_gain(sum_gradient_left, sum_hessian_left,
                                sum_gradient_right, sum_hessian_right,
                                loss_current_node,
                                monotonic_cst,
                                lower_bound,
                                upper_bound,
-                               self.l2_regularization)
+                               self.l2_regularization, partial_gain)
 
             if gain > best_gain and gain > self.min_gain_to_split:
                 found_better_split = True
@@ -856,6 +871,7 @@ cdef class Splitter:
             Y_DTYPE_C MIN_CAT_SUPPORT = 10.
             # this is equal to 1 for losses where hessians are constant
             Y_DTYPE_C support_factor = n_samples / sum_hessians
+            unsigned int split_conservative = 0
 
         # Details on the split finding:
         # We first order categories by their sum_gradients / sum_hessians
@@ -976,7 +992,7 @@ cdef class Splitter:
                                     sum_gradient_right, sum_hessian_right,
                                     loss_current_node, monotonic_cst,
                                     lower_bound, upper_bound,
-                                    self.l2_regularization)
+                                    self.l2_regularization, split_conservative)
                 if gain > best_gain and gain > self.min_gain_to_split:
                     found_better_split = True
                     best_gain = gain
@@ -1036,13 +1052,12 @@ cdef inline Y_DTYPE_C _split_gain(
         Y_DTYPE_C sum_hessian_left,
         Y_DTYPE_C sum_gradient_right,
         Y_DTYPE_C sum_hessian_right,
-        unsigned int n_samples_left, n_samples_right,
         Y_DTYPE_C loss_current_node,
         signed char monotonic_cst,
         Y_DTYPE_C lower_bound,
         Y_DTYPE_C upper_bound,
         Y_DTYPE_C l2_regularization,
-        bool partial_gain) nogil:
+        unsigned int partial_gain) nogil:
     """Loss reduction
 
     Compute the reduction in loss after taking a split, compared to keeping
@@ -1056,6 +1071,8 @@ cdef inline Y_DTYPE_C _split_gain(
         Y_DTYPE_C gain
         Y_DTYPE_C value_left
         Y_DTYPE_C value_right
+        Y_DTYPE_C left_gain
+        Y_DTYPE_C right_gain
 
     # Compute values of potential left and right children
     value_left = compute_node_value(sum_gradient_left, sum_hessian_left,
@@ -1082,10 +1099,18 @@ cdef inline Y_DTYPE_C _split_gain(
     gain = loss_current_node
     left_gain = -_loss_from_value(value_left, sum_gradient_left)
     right_gain = - _loss_from_value(value_right, sum_gradient_right)
-    if not partial_gain:
-        return gain + left_gain + right_gain
+
+    if partial_gain:
+        if left_gain> right_gain:
+            gain += left_gain
+        else:
+            gain += right_gain
+        
     else:
-        return max(left_gain, right_gain)+ gain
+        if not partial_gain:
+            gain += left_gain
+            gain += right_gain
+    return  gain
 
 
 cdef inline Y_DTYPE_C _loss_from_value(

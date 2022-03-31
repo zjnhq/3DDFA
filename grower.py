@@ -11,7 +11,8 @@ import numpy as np
 from timeit import default_timer as time
 import numbers
 
-from sklearn.ensemble._hist_gradient_boosting.splitting import Splitter
+# from sklearn.ensemble._hist_gradient_boosting.splitting import Splitter
+from splitting import Splitter
 from sklearn.ensemble._hist_gradient_boosting.histogram import HistogramBuilder
 from sklearn.ensemble._hist_gradient_boosting.predictor import TreePredictor
 from sklearn.ensemble._hist_gradient_boosting.utils import sum_parallel
@@ -84,7 +85,10 @@ class TreeNode:
     partition_start = 0
     partition_stop = 0
 
-    def __init__(self, depth, sample_indices, sum_gradients, sum_hessians, value=None):
+    split_conservative = 0
+
+    def __init__(self, depth, sample_indices, sum_gradients, sum_hessians, 
+        value=None, split_conservative = 0):
         self.depth = depth
         self.sample_indices = sample_indices
         self.n_samples = sample_indices.shape[0]
@@ -93,6 +97,7 @@ class TreeNode:
         self.value = value
         self.is_leaf = False
         self.set_children_bounds(float("-inf"), float("+inf"))
+        self.split_conservative = split_conservative
 
     def set_children_bounds(self, lower, upper):
         """Set children values bounds to respect monotonic constraints."""
@@ -424,6 +429,7 @@ class TreeGrower:
             node.value,
             node.children_lower_bound,
             node.children_upper_bound,
+            node.split_conservative,
         )
 
         if node.split_info.gain <= 0:  # no valid split
@@ -455,13 +461,23 @@ class TreeGrower:
         depth = node.depth + 1
         n_leaf_nodes = len(self.finalized_leaves) + len(self.splittable_nodes)
         n_leaf_nodes += 2
-
+        split_conservative_left = 0
+        split_conservative_right = 0
+        if depth<4:
+            if sample_indices_left > sample_indices_right:
+                split_conservative_left = 1
+            else:
+                split_conservative_right = 1
+            if depth < 2:
+                split_conservative_left = 1
+                split_conservative_right = 1
         left_child_node = TreeNode(
             depth,
             sample_indices_left,
             node.split_info.sum_gradient_left,
             node.split_info.sum_hessian_left,
             value=node.split_info.value_left,
+            split_conservative = split_conservative_left,
         )
         right_child_node = TreeNode(
             depth,
@@ -469,6 +485,7 @@ class TreeGrower:
             node.split_info.sum_gradient_right,
             node.split_info.sum_hessian_right,
             value=node.split_info.value_right,
+            split_conservative=split_conservative_right
         )
 
         node.right_child = right_child_node
