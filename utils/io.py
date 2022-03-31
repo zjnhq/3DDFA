@@ -41,13 +41,20 @@ def _dump(wfp, obj):
 
 
 def _load_tensor(fp, mode='cpu'):
+    x = torch.from_numpy(_load(fp))
+    if x.type() == 'torch.DoubleTensor':
+        x = x.type(torch.FloatTensor)
     if mode.lower() == 'cpu':
-        return torch.from_numpy(_load(fp)).type(torch.FloatTensor)
+        return x
     elif mode.lower() == 'gpu':
-        return torch.from_numpy(_load(fp)).type(torch.FloatTensor).cuda()
+        return x.cuda()
 
 
 def _tensor_to_cuda(x):
+    if x.type() == 'torch.DoubleTensor':
+        x = x.type(torch.FloatTensor)
+    if x.type() == 'torch.cuda.DoubleTensor':
+        x = x.type(torch.cuda.FloatTensor)
     if x.is_cuda:
         return x
     else:
@@ -55,7 +62,7 @@ def _tensor_to_cuda(x):
 
 
 def _load_gpu(fp):
-    return torch.from_numpy(_load(fp)).cuda()
+    return torch.from_numpy(_load(fp)).type(torch.FloatTensor).cuda()
 
 
 def load_bfm(model_path):

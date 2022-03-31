@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from utils.io import _load, _numpy_to_cuda, _numpy_to_tensor
 from utils.params import *
-
+from pdb import set_trace
 _to_tensor = _numpy_to_cuda  # gpu
 
 
@@ -51,6 +51,7 @@ class VDCLoss(nn.Module):
         return (p, offset, alpha_shp, alpha_exp), (pg, offsetg, alpha_shpg, alpha_expg)
 
     def forward_all(self, input, target):
+
         (p, offset, alpha_shp, alpha_exp), (pg, offsetg, alpha_shpg, alpha_expg) \
             = self.reconstruct_and_parse(input, target)
 
@@ -66,10 +67,12 @@ class VDCLoss(nn.Module):
         return loss
 
     def forward_resample(self, input, target, resample_num=132):
+
         (p, offset, alpha_shp, alpha_exp), (pg, offsetg, alpha_shpg, alpha_expg) \
             = self.reconstruct_and_parse(input, target)
 
         # resample index
+        # set_trace()
         index = torch.randperm(self.w_shp_length)[:resample_num].reshape(-1, 1)
         keypoints_resample = torch.cat((3 * index, 3 * index + 1, 3 * index + 2), dim=1).view(-1).cuda()
         keypoints_mix = torch.cat((self.keypoints, keypoints_resample))
@@ -89,6 +92,10 @@ class VDCLoss(nn.Module):
         return loss
 
     def forward(self, input, target):
+        if input.type()=='torch.DoubleTensor':
+            input = input.type('torch.FloatTensor')
+        if input.type()== 'torch.cuda.DoubleTensor':
+            input = input.type('torch.cuda.FloatTensor')
         if self.opt_style == 'all':
             return self.forward_all(input, target)
         elif self.opt_style == 'resample':

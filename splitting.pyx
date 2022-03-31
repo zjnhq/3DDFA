@@ -571,7 +571,8 @@ cdef class Splitter:
             signed char monotonic_cst,
             Y_DTYPE_C lower_bound,
             Y_DTYPE_C upper_bound,
-            split_info_struct * split_info) nogil:  # OUT
+            split_info_struct * split_info,
+            unsigned int split_motive) nogil:  # OUT
         """Find best bin to split on for a given feature.
 
         Splits that do not satisfy the splitting constraints
@@ -614,7 +615,12 @@ cdef class Splitter:
 
         loss_current_node = _loss_from_value(value, sum_gradients)
 
-        for bin_idx in range(end):
+        partial_gain = 0 # Gain = (left_gain + right_gain) - gain
+        start_bin_idx = 0 
+        if split_motive:
+            partial_gain = 1 # Gain = max(left_gain, right_gain)
+            start_bin_idx = int(end / 3)
+        for bin_idx in range(start_bin_idx, end):
             n_samples_left += histograms[feature_idx, bin_idx].count
             n_samples_right = n_samples_ - n_samples_left
 
@@ -646,7 +652,7 @@ cdef class Splitter:
                                monotonic_cst,
                                lower_bound,
                                upper_bound,
-                               self.l2_regularization)
+                               self.l2_regularization, partial_gain)
 
             if gain > best_gain and gain > self.min_gain_to_split:
                 found_better_split = True
@@ -655,7 +661,7 @@ cdef class Splitter:
             robustness_score = (gain - last_gain) * n_samples_left / histograms[feature_idx, bin_idx].count
             if robustness_score > and split 
                 found_better_split = True
-                split_motive = 1 #default split motive: find an optimal gain
+                split_motive = 1 #conservative split motive: find a good enough subset, and if split moves right may 
                 best_robustness_score = robustness_score
                 best_bin_idx = bin_idx
                 best_sum_gradient_left = sum_gradient_left
@@ -1035,7 +1041,8 @@ cdef inline Y_DTYPE_C _split_gain(
         signed char monotonic_cst,
         Y_DTYPE_C lower_bound,
         Y_DTYPE_C upper_bound,
-        Y_DTYPE_C l2_regularization) nogil:
+        Y_DTYPE_C l2_regularization,
+        bool partial_gain) nogil:
     """Loss reduction
 
     Compute the reduction in loss after taking a split, compared to keeping
@@ -1066,14 +1073,20 @@ cdef inline Y_DTYPE_C _split_gain(
         # account (if any).
         return -1
 
-    gain = loss_current_node
-    gain -= _loss_from_value(value_left, sum_gradient_left)
-    gain -= _loss_from_value(value_right, sum_gradient_right)
+    # gain = loss_current_node
+    # gain -= _loss_from_value(value_left, sum_gradient_left)
+    # gain -= _loss_from_value(value_right, sum_gradient_right)
     # Note that for the gain to be correct (and for min_gain_to_split to work
     # as expected), we need all values to be bounded (current node, left child
     # and right child).
+    gain = loss_current_node
+    left_gain = -_loss_from_value(value_left, sum_gradient_left)
+    right_gain = - _loss_from_value(value_right, sum_gradient_right)
+    if not partial_gain:
+        return gain + left_gain + right_gain
+    else:
+        return max(left_gain, right_gain)+ gain
 
-    return gain
 
 cdef inline Y_DTYPE_C _loss_from_value(
         Y_DTYPE_C value,

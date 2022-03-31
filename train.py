@@ -418,7 +418,7 @@ def refine_gbdt(train_loader, model, criterion, optimizer, args, fileid= 1):
         print(lightgbms[0].get_params())
         print("saved gbdt after refinement.")
 
-max_batches_for_eval = 450
+max_batches_for_eval = 300
 
 def validate(val_loader, model, criterion, epoch, args):
     model.eval()
@@ -503,7 +503,13 @@ def validate_gbdt(val_loader, model, criterion, args):
     if use_attack==1:
         model.train()
         model.module.SetMidfeatureNeedGrad(True)
+
     for i, (input, target) in enumerate(val_loader):
+        if input.type()== 'torch.DoubleTensor':
+            input = input.type('torch.FloatTensor')
+        if input.type()== 'torch.cuda.DoubleTensor':
+            input = input.type('torch.cuda.FloatTensor')
+        target = target.type('torch.FloatTensor')
         # compute output
         target.requires_grad = False
         target = target.cuda(non_blocking=True)
@@ -512,7 +518,7 @@ def validate_gbdt(val_loader, model, criterion, args):
 
         gbdt_output = gbdt.predict(model.module.low_features, model.module.mid_features)
         # gbdt_output = output * (1- alpha) + gbdt_output* alpha
-        gbdt_output[12:] = output[12:]#* (1- alpha) + gbdt_output[12:] * alpha
+        # gbdt_output[12:] = output[12:]#* (1- alpha) + gbdt_output[12:] * alpha
         #GBDT seems to have better result in predicting R,t, than predicting component coefficients
         
         loss = criterion(gbdt_output, target)
@@ -549,7 +555,7 @@ def validate_gbdt(val_loader, model, criterion, args):
             loss = criterion(gbdt_output, target)
             losses_gbdt_attacked.append(loss.item())
 
-        # if i> max_batches_for_eval: break
+        if i> max_batches_for_eval: break
         if i % args.print_freq==0:
             print("validate gbdt for:"+str(i))
             elapse = time.time() - end
@@ -568,7 +574,10 @@ def validate_gbdt(val_loader, model, criterion, args):
                  f'CNN Loss attacked {np.mean(losses_cnn_attacked)*100:.4f}\t')
     logging.info(f'GBDT Loss original {np.mean(losses_gbdt_original)*100:.4f}\t'
                  f'GBDT Loss attacked {np.mean(losses_gbdt_attacked)*100:.4f}\t')
+    return [np.mean(losses_cnn_original)*100, np.mean(losses_cnn_attacked)*100, np.mean(losses_gbdt_original)*100, np.mean(losses_gbdt_attacked)*100]
+
 from copy import deepcopy
+
 def plot_gbdt(val_loader, model, criterion, args, use_gbdt, use_attack):
     
     alpha = args.alpha
@@ -640,10 +649,10 @@ def plot_gbdt(val_loader, model, criterion, args, use_gbdt, use_attack):
 
         if use_attack==1:
             input_original = input.clone().detach()
-            attack_maxstepsize = 0.01#np.abs(input_original.cpu().numpy()).mean()*0.02
+            attack_maxstepsize = args.attacksize  # 0.01#np.abs(input_original.cpu().numpy()).mean()*0.02
             input_upper_limit= input_original + attack_maxstepsize
             input_lower_limit = input_original - attack_maxstepsize
-            steps = 10
+            steps = min(int(attack_maxstepsize/0.002),5)
             attack_stepsize = attack_maxstepsize/steps
             # print("prediction before:"+str(output[0,-6:]))
             input.requires_grad = True
@@ -904,9 +913,43 @@ def main():
         logging.info('Testing from initial')
         validate(val_loader, model, criterion, args.start_epoch)
 
-    # set_trace()
+    args.latex_table=1
+    if args.latex_table==1:
+        result_list = []
+        config_list = []
+        feature_layers = [ [0,12],[4,12], [8,15],[12,15]]
+        attacksize = 0.01
+        loss_metric = VDCLoss(opt_style=args.opt_style).cuda()
+        for config_iter in range(len(feature_layers)):
+            feature_layer = feature_layers[config_iter]
+            for loss_metric in [ VDCLoss(opt_style=args.opt_style).cuda(), WPDCLoss(opt_style=args.opt_style).cuda(),  nn.MSELoss(size_average=args.size_average).cuda()]:
+                for attacksize in [0.01, 0.02, 0.03]:
+                    args.attacksize = attacksize
+                    args.feature_layers = feature_layer
+                    args.layer_spec_suffix ='_layer'+ str(args.feature_layers[0])+'_'+str(args.feature_layers[1])           
+                    logging.info("start validating layer "+args.layer_spec_suffix)
+                    result =validate_gbdt(val_loader, model, loss_metric, args)
+                    logging.info("end validating layer "+args.layer_spec_suffix)
+                    result_list.append(result)
+            # break
+            pkl.dump([result_list,config_list],open('result_list.pkl','wb'))
+    [result_list,config_list] = pkl.load(open('result_list.pkl','rb'))
+    result_latex = open('result_latex.txt','w')
+    lineid= 0
+    for result in result_list:
+        if lineid % 3==0:
+            result_latex.write("\\\\ \\hline")
+            result_latex.write("\n")
+        result_latex.write("{:.2f}".format(float(result[0]))+"& ")
+        result_latex.write("{:.2f}".format(float(result[1]))+"& ") 
+        result_latex.write("{:.2f}".format(float(result[3]))+"& ") 
+        lineid+=1
+    result_latex.close()
+    return
+
+
     if args.gbdt==1:
-        for feature_layers in [ [8,15], [12,15], [6,15]]:
+        for feature_layers in [  [8,15], [6,15]]:
             # try:
             args.feature_layers = feature_layers
 
