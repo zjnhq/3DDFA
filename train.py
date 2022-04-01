@@ -197,7 +197,6 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
 
 def prepare_gbdt(train_loader, model, criterion, optimizer, args):
 
-
     end = time.time()
     # build a batch of raw/mid features for GBDT training
     batch_size = args.batch_size
@@ -210,7 +209,6 @@ def prepare_gbdt(train_loader, model, criterion, optimizer, args):
     model.module.SetMidfeatureNeedGrad(True)
     model.module.SetFeatureLayers(args.feature_layers)
     for i, (input, target) in enumerate(train_loader):
-        
         target_dim = target.shape[1]
         output = model(input)
         rawfeatures = model.module.low_features
@@ -218,7 +216,6 @@ def prepare_gbdt(train_loader, model, criterion, optimizer, args):
 
         mid_features = model.module.mid_features
         midfeature_dim = mid_features.shape[1]* mid_features.shape[2] * mid_features.shape[3] 
-        # set_trace()
         del model.module.mid_features
         break
     torch.cuda.empty_cache()
@@ -277,11 +274,7 @@ def generate_gbdt_dataset(train_loader, model, criterion, optimizer, args):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
-    # model.train()
     end = time.time()
-    # loader is batch style
-    # for i, (input, target) in enumerate(train_loader):
-
     # build a batch of raw/mid features for GBDT training
     batch_size = args.batch_size
     
@@ -328,13 +321,10 @@ def generate_gbdt_dataset(train_loader, model, criterion, optimizer, args):
         feature_idx += batch_size
         batch_time.update(time.time() - end)
         end = time.time()
-        # log
+
         if i % args.print_freq == 0:
             logging.info(f'file id: [{fileid}][{i}/{len(train_loader)}]\t'
-                         # f'LR: {lr:8f}\t'
                          f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                         # f'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
-                         # f'Loss {losses.val:.4f} ({losses.avg:.4f})'
                          )
         del input
         del model.module.mid_features
@@ -348,14 +338,13 @@ def train_gbdt(train_loader, model, criterion, optimizer, args, fileid = 1):
     end = time.time()
     # build a batch of raw/mid features for GBDT training
     filename = './gbdt_feature/gbdt_feature'+ args.layer_spec_suffix+ '_file' +str(fileid)+'.pkl'
-    # set_trace()
     [batched_mid_features, batched_target] = pkl.load(open(filename,'rb'))
 
     lightgbms = []
     target_dim = batched_target.shape[1]
     max_leaf_nodes = 63
     max_bins = 63
-    num_init_trees = 40
+    num_init_trees = 50
     end = time.time()
     for i in range(target_dim):
         # print("training gbdt for target dim:"+str(i))
@@ -363,8 +352,8 @@ def train_gbdt(train_loader, model, criterion, optimizer, args, fileid = 1):
         if i%15==0:
             verbose=1
         else:
-            verbose =0
-        lr= 0.2
+            verbose =1
+        lr= 0.3
         # if i>11:
         #     lr= 0.2 
         #     num_init_trees = 50
@@ -418,7 +407,7 @@ def refine_gbdt(train_loader, model, criterion, optimizer, args, fileid= 1):
         print(lightgbms[0].get_params())
         print("saved gbdt after refinement.")
 
-max_batches_for_eval = 300
+max_batches_for_eval = 30
 
 def validate(val_loader, model, criterion, epoch, args):
     model.eval()
@@ -452,7 +441,6 @@ class GBDT_Predictor:
         self.lightgbms = []
         
         for i in range(self.target_dim):
-            # set_trace()
             # self.lightgbm = pkl.load(open(gbdt_param_filename+ '_ref' + str(i) + '.pkl','rb'))
             self.lightgbm = pkl.load(open(gbdt_param_filename+ str(i) +args.layer_spec_suffix +'_batch' +str(fileid) + '.pkl','rb'))
             self.lightgbms.append(self.lightgbm)
@@ -528,17 +516,16 @@ def validate_gbdt(val_loader, model, criterion, args):
 
         if use_attack==1:
             input_original = input.clone().detach()
-            attack_maxstepsize = 0.01#np.abs(input_original.cpu().numpy()).mean()*0.02
+            attack_maxstepsize = args.attacksize #np.abs(input_original.cpu().numpy()).mean()*0.02
             input_upper_limit= input_original + attack_maxstepsize
             input_lower_limit = input_original - attack_maxstepsize
-            steps = 10
+            steps = min(int(attack_maxstepsize/0.001),5)
             attack_stepsize = attack_maxstepsize/steps
             # attack_stepsize = 100000.0
             input.retain_grad()
             for attack_iter in range(steps):
                 loss = criterion(output, target)
                 loss.backward()
-                # set_trace()
                 # input.abs().mean()/(input.grad.abs().mean())
                 input.detach()
                 input.data = input.data + input.grad.sign() * attack_stepsize
@@ -913,58 +900,95 @@ def main():
         logging.info('Testing from initial')
         validate(val_loader, model, criterion, args.start_epoch)
 
-    args.latex_table=1
+    args.latex_table = 0
     if args.latex_table==1:
         result_list = []
         config_list = []
-        feature_layers = [ [0,12],[4,12], [8,15],[12,15]]
+        # feature_layers = [ [0,12],[4,12], [8,15],[12,15]]
+        feature_layers = [ [0,12]]
         attacksize = 0.01
         loss_metric = VDCLoss(opt_style=args.opt_style).cuda()
         for config_iter in range(len(feature_layers)):
             feature_layer = feature_layers[config_iter]
             for loss_metric in [ VDCLoss(opt_style=args.opt_style).cuda(), WPDCLoss(opt_style=args.opt_style).cuda(),  nn.MSELoss(size_average=args.size_average).cuda()]:
-                for attacksize in [0.01, 0.02, 0.03]:
+                for attacksize in [0.005, 0.01, 0.02]:
                     args.attacksize = attacksize
                     args.feature_layers = feature_layer
                     args.layer_spec_suffix ='_layer'+ str(args.feature_layers[0])+'_'+str(args.feature_layers[1])           
                     logging.info("start validating layer "+args.layer_spec_suffix)
-                    result =validate_gbdt(val_loader, model, loss_metric, args)
+                    result = validate_gbdt(val_loader, model, loss_metric, args)
                     logging.info("end validating layer "+args.layer_spec_suffix)
                     result_list.append(result)
             # break
             pkl.dump([result_list,config_list],open('result_list.pkl','wb'))
-    [result_list,config_list] = pkl.load(open('result_list.pkl','rb'))
-    result_latex = open('result_latex.txt','w')
-    lineid= 0
-    for result in result_list:
-        if lineid % 3==0:
-            result_latex.write("\\\\ \\hline")
-            result_latex.write("\n")
-        result_latex.write("{:.2f}".format(float(result[0]))+"& ")
-        result_latex.write("{:.2f}".format(float(result[1]))+"& ") 
-        result_latex.write("{:.2f}".format(float(result[3]))+"& ") 
-        lineid+=1
-    result_latex.close()
-    return
+        # [result_list,config_list] = pkl.load(open('result_list.pkl','rb'))
+        # result_latex = open('result_latex.txt','w')
+        # lineid= 0
+        # for result in result_list:
+        #     if lineid % 3==0:
+        #         result_latex.write("\\\\ \\hline")
+        #         result_latex.write("\n")
+        #     result_latex.write("{:.2f}".format(float(result[0]))+"& ")
+        #     result_latex.write("{:.2f}".format(float(result[1]))+"& ") 
+        #     result_latex.write("{:.2f}".format(float(result[3]))+"& ") 
+        #     lineid+=1
+        # result_latex.close()
+        # return
 
 
     if args.gbdt==1:
-        for feature_layers in [  [8,15], [6,15]]:
-            # try:
-            args.feature_layers = feature_layers
+        # for feature_layers in [ [8,15], [12,15], [0,12]]:
+        # try:
+        feature_layers = [8,15]
+        args.feature_layers = feature_layers
 
-            args.layer_spec_suffix ='_layer'+ str(args.feature_layers[0])+'_'+str(args.feature_layers[1])
-            logging.info("start generating feature from layer "+args.layer_spec_suffix)
-            prepare_gbdt(train_loader, model, criterion, optimizer, args)
-            generate_gbdt_dataset(train_loader, model, criterion, optimizer, args)
-            logging.info("start training GBDT on layer "+args.layer_spec_suffix)
-            train_gbdt(train_loader, model, criterion, optimizer, args)
-            # refine_gbdt(train_loader, model, criterion, optimizer, args)
-            logging.info("start validating layer "+args.layer_spec_suffix)
-            validate_gbdt(val_loader, model, criterion, args)
-            logging.info("end validating layer "+args.layer_spec_suffix)
-            # except:
-            #     logging.info("some error happened")
+        args.layer_spec_suffix ='_layer'+ str(args.feature_layers[0])+'_'+str(args.feature_layers[1])
+        logging.info("start generating feature from layer "+args.layer_spec_suffix)
+        # prepare_gbdt(train_loader, model, criterion, optimizer, args)
+        # generate_gbdt_dataset(train_loader, model, criterion, optimizer, args)
+        logging.info("start training GBDT on layer "+args.layer_spec_suffix)
+        train_gbdt(train_loader, model, criterion, optimizer, args)
+        # refine_gbdt(train_loader, model, criterion, optimizer, args)
+        logging.info("start validating layer "+args.layer_spec_suffix)
+        validate_gbdt(val_loader, model, criterion, args)
+        logging.info("end validating layer "+args.layer_spec_suffix)
+        # except:
+        #     logging.info("some error happened")
+
+        feature_layers = [12,15]
+        args.feature_layers = feature_layers
+
+        args.layer_spec_suffix ='_layer'+ str(args.feature_layers[0])+'_'+str(args.feature_layers[1])
+        logging.info("start generating feature from layer "+args.layer_spec_suffix)
+        # prepare_gbdt(train_loader, model, criterion, optimizer, args)
+        # generate_gbdt_dataset(train_loader, model, criterion, optimizer, args)
+        logging.info("start training GBDT on layer "+args.layer_spec_suffix)
+        train_gbdt(train_loader, model, criterion, optimizer, args)
+        # refine_gbdt(train_loader, model, criterion, optimizer, args)
+        logging.info("start validating layer "+args.layer_spec_suffix)
+        validate_gbdt(val_loader, model, criterion, args)
+        logging.info("end validating layer "+args.layer_spec_suffix)
+        # except:
+        #     logging.info("some error happened")
+
+        feature_layers = [0,12]
+        args.feature_layers = feature_layers
+
+        args.layer_spec_suffix ='_layer'+ str(args.feature_layers[0])+'_'+str(args.feature_layers[1])
+        logging.info("start generating feature from layer "+args.layer_spec_suffix)
+        # prepare_gbdt(train_loader, model, criterion, optimizer, args)
+        # generate_gbdt_dataset(train_loader, model, criterion, optimizer, args)
+        logging.info("start training GBDT on layer "+args.layer_spec_suffix)
+        train_gbdt(train_loader, model, criterion, optimizer, args)
+        # refine_gbdt(train_loader, model, criterion, optimizer, args)
+        logging.info("start validating layer "+args.layer_spec_suffix)
+        validate_gbdt(val_loader, model, criterion, args)
+        logging.info("end validating layer "+args.layer_spec_suffix)
+        # except:
+        #     logging.info("some error happened")
+
+
+
         plot_result = 0
         if plot_result:
             plot_dataset = DDFAPlotDataset(

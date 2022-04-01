@@ -11,8 +11,8 @@ import numpy as np
 from timeit import default_timer as time
 import numbers
 
-# from sklearn.ensemble._hist_gradient_boosting.splitting import Splitter
-from splitting import Splitter
+from sklearn.ensemble._hist_gradient_boosting.splitting import Splitter
+# from splitting import Splitter
 from sklearn.ensemble._hist_gradient_boosting.histogram import HistogramBuilder
 from sklearn.ensemble._hist_gradient_boosting.predictor import TreePredictor
 from sklearn.ensemble._hist_gradient_boosting.utils import sum_parallel
@@ -420,7 +420,6 @@ class TreeGrower:
         (min_hessians_to_split, min_gain_to_split, min_samples_leaf)
         """
 
-        # set_trace()
         node.split_info = self.splitter.find_node_split(
             node.n_samples,
             node.histograms,
@@ -429,8 +428,10 @@ class TreeGrower:
             node.value,
             node.children_lower_bound,
             node.children_upper_bound,
-            node.split_conservative,
+            # node.split_conservative,
         )
+        # print(node)
+        # set_trace()
 
         if node.split_info.gain <= 0:  # no valid split
             self._finalize_leaf(node)
@@ -449,6 +450,7 @@ class TreeGrower:
         """
         # Consider the node with the highest loss reduction (a.k.a. gain)
         node = heappop(self.splittable_nodes)
+        # set_trace()
 
         tic = time()
         (
@@ -463,14 +465,15 @@ class TreeGrower:
         n_leaf_nodes += 2
         split_conservative_left = 0
         split_conservative_right = 0
-        if depth<4:
-            if sample_indices_left > sample_indices_right:
-                split_conservative_left = 1
-            else:
-                split_conservative_right = 1
-            if depth < 2:
-                split_conservative_left = 1
-                split_conservative_right = 1
+        # set_trace()
+        # if depth<4:
+        #     if sample_indices_left > sample_indices_right:
+        #         split_conservative_left = 1
+        #     else:
+        #         split_conservative_right = 1
+        if depth < 3:
+            split_conservative_left = 1
+            split_conservative_right = 1
         left_child_node = TreeNode(
             depth,
             sample_indices_left,

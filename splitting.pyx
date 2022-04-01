@@ -14,7 +14,7 @@ cimport numpy as np
 from libc.stdlib cimport malloc, free, qsort
 from libc.string cimport memcpy
 from numpy.math cimport INFINITY
-
+from libc.stdio cimport printf
 from sklearn.ensemble._hist_gradient_boosting.common cimport X_BINNED_DTYPE_C
 from sklearn.ensemble._hist_gradient_boosting.common cimport Y_DTYPE_C
 from sklearn.ensemble._hist_gradient_boosting.common cimport hist_struct
@@ -486,6 +486,7 @@ cdef class Splitter:
                 # node into a leaf.
                 split_infos[feature_idx].gain = -1
                 split_infos[feature_idx].is_categorical = is_categorical[feature_idx]
+                # printf("%d feature_idx\n", feature_idx)
 
                 if is_categorical[feature_idx]:
                     self._find_best_bin_to_split_category(
@@ -616,6 +617,7 @@ cdef class Splitter:
             # Y_DTYPE_C next_gain = -1  # make a Conservative split if: gain >>> last_gain (shifting left for one bin )
             # and gain > next_gain (shifting right)
             unsigned int partial_gain = split_conservative
+            unsigned int bin_idx_end = end
 
         sum_gradient_left, sum_hessian_left = 0., 0.
         n_samples_left = 0
@@ -624,10 +626,14 @@ cdef class Splitter:
 
         # partial_gain = 0 # Gain = (left_gain + right_gain) - gain
         # start_bin_idx = 0 
+        bin_idx = 0
         if split_conservative:
             # partial_gain = 1 # Gain = max(left_gain, right_gain)
-            bin_idx = end / 2
-        while bin_idx < end:
+            bin_idx = end / 4
+            bin_idx_end = end 
+            bin_idx_end -= end / 4
+        # printf("bin_idx:%d bin_idx_end:%d end:%d \n", bin_idx, bin_idx_end, end)
+        while bin_idx < bin_idx_end:
             n_samples_left += histograms[feature_idx, bin_idx].count
             n_samples_right = n_samples_ - n_samples_left
 
@@ -660,7 +666,7 @@ cdef class Splitter:
                                lower_bound,
                                upper_bound,
                                self.l2_regularization, partial_gain)
-
+            # printf("bin_idx: %d gain:%f best gain:%f \n",bin_idx, gain, best_gain)
             if gain > best_gain:
                 if gain > self.min_gain_to_split:
                     found_better_split = True
@@ -675,6 +681,7 @@ cdef class Splitter:
                     best_n_samples_left = n_samples_left
             # robustness_score = (gain - last_gain) * n_samples_left / histograms[feature_idx, bin_idx].count
             # if robustness_score > and split 
+            bin_idx +=1
             
 
         if found_better_split:
@@ -743,15 +750,22 @@ cdef class Splitter:
             unsigned int best_bin_idx
             unsigned int best_n_samples_left
             Y_DTYPE_C best_gain = split_info.gain  # computed during previous scan
+            unsigned int bin_idx_start
+            unsigned int bin_idx_end
+            unsigned int partial_gain = split_conservative
 
         sum_gradient_right, sum_hessian_right = 0., 0.
         n_samples_right = 0
 
         loss_current_node = _loss_from_value(value, sum_gradients)
+        bin_idx_start = start 
+        bin_idx_end = -1
         if split_conservative:
-            
+            bin_idx_start -= start / 4
+            bin_idx_end = start / 4
+            bin_idx_end -=1
 
-        for bin_idx in range(start, -1, -1):
+        for bin_idx in range(bin_idx_start, bin_idx_end, -1):
             n_samples_right += histograms[feature_idx, bin_idx + 1].count
             n_samples_left = n_samples_ - n_samples_right
 
@@ -778,9 +792,7 @@ cdef class Splitter:
                 # won't get any better (hessians are > 0 since loss is convex)
                 break
 
-            partial_gain = 0
-            if split_conservative:
-                partial_gain = 1
+            
             gain = _split_gain(sum_gradient_left, sum_hessian_left,
                                sum_gradient_right, sum_hessian_right,
                                loss_current_node,
@@ -1102,8 +1114,10 @@ cdef inline Y_DTYPE_C _split_gain(
 
     if partial_gain:
         if left_gain> right_gain:
+            left_gain *= 2
             gain += left_gain
         else:
+            right_gain *= 2
             gain += right_gain
         
     else:
