@@ -9,7 +9,7 @@ from skimage import io
 import matplotlib.pyplot as plt
 from benchmark_aflw2000 import convert_to_ori
 import scipy.io as sio
-
+datafolder = 'D:/data/facealignment/'
 
 def aflw2000():
     arch = 'mobilenet_1'
@@ -18,8 +18,8 @@ def aflw2000():
 
     params = extract_param(
         checkpoint_fp=checkpoint_fp,
-        root='test.data/AFLW2000-3D_crop',
-        filelists='test.data/AFLW2000-3D_crop.list',
+        root=datafolder+'test.data/AFLW2000-3D_crop',
+        filelists=datafolder+'test.data/AFLW2000-3D_crop.list',
         arch=arch,
         device_ids=device_ids,
         batch_size=128)
@@ -27,8 +27,9 @@ def aflw2000():
 
 
 def draw_landmarks():
-    filelists = 'test.data/AFLW2000-3D_crop.list'
+    filelists = datafolder+'test.data/AFLW2000-3D_crop.list'
     root = 'AFLW-2000-3D/'
+    root =datafolder+'test.data/AFLW2000-3D_crop/'
     fns = open(filelists).read().strip().split('\n')
     params = _load('res/params_aflw2000.npy')
 
@@ -90,7 +91,7 @@ def draw_landmarks():
 
 
 def gen_3d_vertex():
-    filelists = 'test.data/AFLW2000-3D_crop.list'
+    filelists = datafolder+'test.data/AFLW2000-3D_crop.list'
     root = 'AFLW-2000-3D/'
     fns = open(filelists).read().strip().split('\n')
     params = _load('res/params_aflw2000.npy')
@@ -109,10 +110,10 @@ def gen_3d_vertex():
 
 def main():
     # step1: extract params
-    # aflw2000()
+    aflw2000()
 
     # step2: draw landmarks
-    # draw_landmarks()
+    draw_landmarks()
 
     # step3: visual 3d vertex
     gen_3d_vertex()

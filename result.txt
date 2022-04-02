@@ -4,3 +4,88 @@
 [2022-03-28 01:13:54,992] [p28016] [D:\code\face\3DDFA\train.py:560] [INFO] alpha[0.6] Time 100.808 Val: [1611 /1612]   CNN Loss original 6.2887        CNN Loss attacked 9.5472
 
 [2022-03-28 01:13:54,993] [p28016] [D:\code\face\3DDFA\train.py:563] [INFO] GBDT Loss original 5.9841   GBDT Loss attacked 8.2710
+
+
+[2022-03-28 20:32:25,931] [p39040] [D:\code\face\3DDFA\train.py:565] [INFO] _layer4_12
+[2022-03-28 20:32:25,932] [p39040] [D:\code\face\3DDFA\train.py:566] [INFO] alpha[0.6] Time 99.076 Val: [1611 /1612]    CNN Loss original 6.2791        CNN Loss attacked 9.5491
+
+[2022-03-28 20:32:25,932] [p39040] [D:\code\face\3DDFA\train.py:569] [INFO] GBDT Loss original 5.9987   GBDT Loss attacked 8.2518
+[2022-03-28 20:32:26,061] [p39040] [D:\code\face\3DDFA\train.py:922] [INFO] end validating layer _layer4_12
+
+
+layer8_15
+[2022-03-29 04:26:49,147] [p29984] [D:\code\face\3DDFA\train.py:566] [INFO] alpha[0.6] Time 97.177 Val: [1611 /1612]    CNN Loss original 6.2812        CNN Loss attacked 9.5534
+
+[2022-03-29 04:26:49,148] [p29984] [D:\code\face\3DDFA\train.py:569] [INFO] GBDT Loss original 6.1689   GBDT Loss attacked 8.7505
+[2022-03-29 04:26:49,267] [p29984] [D:\code\face\3DDFA\train.py:922] [INFO] end validating layer _layer8_15
+
+[2022-03-29 14:42:21,099] [p57708] [D:\code\face\3DDFA\train.py:565] [INFO] _layer12_15
+[2022-03-29 14:42:21,100] [p57708] [D:\code\face\3DDFA\train.py:566] [INFO] alpha[0.6] Time 98.762 Val: [1611 /1612]    CNN Loss original 6.2853        CNN Loss attacked 9.5402
+
+[2022-03-29 14:42:21,100] [p57708] [D:\code\face\3DDFA\train.py:569] [INFO] GBDT Loss original 6.0264   GBDT Loss attacked 8.6426
+
+
+alpha =0.5
+[4,12]
+(base) PS D:\code\face\3DDFA> python ./benchmark.py -c models/phase1_wpdc_vdc.pth.tar
+Extracting params take  40.764s
+[ 0, 30]        Mean: 4.052, Std: 1.990
+[30, 60]        Mean: 5.234, Std: 2.966
+[60, 90]        Mean: 6.707, Std: 4.039
+[ 0, 90]        Mean: 5.331, Std: 1.086
+Extracting params take  159.425s
+[ 0, 30]        Mean: 5.508, Std: 4.324
+[30, 60]        Mean: 6.686, Std: 5.438
+[60, 90]        Mean: 7.833, Std: 7.427
+[ 0, 90]        Mean: 6.676, Std: 0.949
+
+[0,12]
+(base) PS D:\code\face\3DDFA> python ./benchmark.py
+Extracting params take  62.633s
+[ 0, 30]        Mean: 4.242, Std: 2.148
+[30, 60]        Mean: 5.401, Std: 3.153
+[60, 90]        Mean: 6.947, Std: 4.167
+[ 0, 90]        Mean: 5.530, Std: 1.108
+Extracting params take  321.759s
+[ 0, 30]        Mean: 5.643, Std: 4.371
+[30, 60]        Mean: 6.834, Std: 5.425
+[60, 90]        Mean: 8.123, Std: 7.520
+[ 0, 90]        Mean: 6.866, Std: 1.013
+
+feature_layers = [8,15]
+Extracting params take  50.081s
+[ 0, 30]        Mean: 3.510, Std: 2.136
+[30, 60]        Mean: 4.590, Std: 3.331
+[60, 90]        Mean: 5.937, Std: 3.788
+[ 0, 90]        Mean: 4.679, Std: 0.993
+Extracting params take  295.861s
+[ 0, 30]        Mean: 4.953, Std: 4.298
+[30, 60]        Mean: 5.995, Std: 5.765
+[60, 90]        Mean: 6.898, Std: 7.552
+[ 0, 90]        Mean: 5.949, Std: 0.795
+
+[0,15]
+(base) PS D:\code\face\3DDFA> python ./benchmark.py
+Extracting params take  60.871s
+[ 0, 30]        Mean: 3.751, Std: 2.029
+[30, 60]        Mean: 4.790, Std: 2.798
+[60, 90]        Mean: 6.412, Std: 3.917
+[ 0, 90]        Mean: 4.984, Std: 1.095
+Extracting params take  293.536s
+[ 0, 30]        Mean: 5.034, Std: 4.182
+[30, 60]        Mean: 6.089, Std: 5.417
+[60, 90]        Mean: 7.214, Std: 7.590
+[ 0, 90]        Mean: 6.112, Std: 0.890
+
+cnn
+(base) PS D:\code\face\3DDFA> python ./benchmark.py -c models/phase1_wpdc_vdc.pth.tar
+Extracting params take  34.852s
+[ 0, 30]        Mean: 3.099, Std: 2.044
+[30, 60]        Mean: 4.172, Std: 3.106
+[60, 90]        Mean: 5.486, Std: 3.569
+[ 0, 90]        Mean: 4.252, Std: 0.976
+Extracting params take  83.073s
+[ 0, 30]        Mean: 4.488, Std: 4.094
+[30, 60]        Mean: 5.381, Std: 5.416
+[60, 90]        Mean: 6.334, Std: 7.221
+[ 0, 90]        Mean: 5.401, Std: 0.754

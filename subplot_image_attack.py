@@ -5,14 +5,14 @@ import matplotlib.pyplot as plt
 # Fixing random state for reproducibility
 np.random.seed(19680801)
 # plot_contents = ['ptx','pose']
-plot_contents = ['pose']
+plot_contents = ['ptx']
 for content in plot_contents:
 	if content == 'pose':
 		n_file_per_person = 3
 	if content=='ptx':
-		n_file_per_person = 4
+		n_file_per_person = 6
 
-	n_person_per_row =3
+	n_person_per_row =2
 	n_row = 4
 	n_col = n_file_per_person * n_person_per_row
 	fig, axs = plt.subplots(nrows=n_row, ncols=n_col, figsize=(20, 20),
@@ -43,14 +43,14 @@ for content in plot_contents:
 		ptx_files2.append(cv2.imread(ptx_file_name2, cv2.IMREAD_COLOR))
 
 		depth_file_name = prefix + str(person_id)+ '_depth' +'attack_cnn.png'
-		depth_files.append(cv2.imread(depth_file_name, cv2.IMREAD_UNCHANGED))
+		depth_files.append(cv2.imread(depth_file_name, cv2.IMREAD_COLOR))
 		depth_file_name2 = prefix + str(person_id)+ '_depth' +'attack_gbdt.png'
-		depth_files2.append(cv2.imread(depth_file_name2, cv2.IMREAD_UNCHANGED))
+		depth_files2.append(cv2.imread(depth_file_name2, cv2.IMREAD_COLOR))
 		
 		pncc_file_name = prefix + str(person_id)+ '_pncc' +'attack_cnn.png'
-		pncc_files.append(cv2.imread(depth_file_name, cv2.IMREAD_UNCHANGED))
+		pncc_files.append(cv2.imread(pncc_file_name, cv2.IMREAD_COLOR))
 		pncc_file_name2 = prefix + str(person_id)+ '_pncc' +'attack_gbdt.png'
-		pncc_files2.append(cv2.imread(depth_file_name2, cv2.IMREAD_UNCHANGED))
+		pncc_files2.append(cv2.imread(pncc_file_name2, cv2.IMREAD_UNCHANGED))
 
 		pose_file_name = prefix + str(person_id)+ '_pose' +'orig_gt.jpg'
 		pose_files.append(cv2.imread(pose_file_name, cv2.IMREAD_UNCHANGED))
@@ -77,12 +77,12 @@ for content in plot_contents:
 			if subplot_id%n_file_per_person==0:
 				ax.imshow(depth_files2[person_id])
 				if person_id<n_person_per_row: ax.set_title('GBDT Attacked')
-			# if subplot_id%n_file_per_person==5:
-			# 	ax.imshow(pncc_files[person_id])
-			# 	if person_id<3: ax.set_title('CNN Attacked')
-			# if subplot_id%n_file_per_person==4:
-			# 	ax.imshow(pncc_files2[person_id])
-			# 	if person_id<3: ax.set_title('GBDT Attacked')
+			if subplot_id%n_file_per_person==5:
+				ax.imshow(pncc_files[person_id])
+				if person_id<3: ax.set_title('CNN Attacked')
+			if subplot_id%n_file_per_person==4:
+				ax.imshow(pncc_files2[person_id])
+				if person_id<3: ax.set_title('GBDT Attacked')
 
 			subplot_id += 1
 			if subplot_id%n_file_per_person==0:

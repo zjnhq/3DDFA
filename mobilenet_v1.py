@@ -91,39 +91,42 @@ class MobileNet(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
         self.feature_grad = False
+        self.mid_features_layer = -100
+        self.low_features_layer = -100
 
-    # def forward(self, x):
-    #     x = self.conv1(x)
-    #     x = self.bn1(x)
-    #     x = self.relu(x)
-    #     # set_trace()
+    def forward(self, x):
+        if x.type()=='torch.DoubleTensor':
+            x = x.type('torch.FloatTensor')
+        if x.type()== 'torch.cuda.DoubleTensor':
+            x = x.type('torch.cuda.FloatTensor')
+        if self.mid_features_layer<0 and self.low_features_layer<0:
+            return self.forward_simple(x)
+        else:
+            return self.forward_store_features(x)
 
-    #     x = self.dw2_1(x)
-    #     x = self.dw2_2(x)
-    #     x = self.dw3_1(x)
-    #     x = self.dw3_2(x)
-    #     x = self.dw4_1(x)
-    #     x = self.dw4_2(x)
-    #     x = self.dw5_1(x)
-    #     x = self.dw5_2(x)
-    #     x = self.dw5_3(x)
-    #     x = self.dw5_4(x)
-    #     x = self.dw5_5(x)
-    #     # x = self.dw5_6(x)
-        
-    #     self.mid_features = self.dw5_6(x)#.cpu().detach().numpy()
-    #     if self.midfeature_grad:
-    #         self.mid_features.retain_grad()
-    #     else:
-    #         self.mid_features.clone().detach()
-    #     x2 = self.dw6(self.mid_features)
+    def forward_simple(self, x):
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.dw2_1(x)
+        x = self.dw2_2(x)
+        x = self.dw3_1(x)
+        x = self.dw3_2(x)
+        x = self.dw4_1(x)
+        x = self.dw4_2(x)
+        x = self.dw5_1(x)
+        x = self.dw5_2(x)
+        x = self.dw5_3(x)
+        x = self.dw5_4(x)
+        x = self.dw5_5(x)
+        x = self.dw5_6(x)
+        x = self.dw6(x)
+        x = self.avgpool(x)
+        x = x.view(x.size(0), -1)
 
-    #     x2 = self.avgpool(x2)
-    #     x2 = x2.view(x2.size(0), -1)
+        x = self.fc(x)
 
-    #     x2 = self.fc(x2)
-
-    #     return x2
+        return x
 
     def SetFeatureLayers(self, feature_layers = [5,12]):
         if len(feature_layers)==2:
@@ -149,7 +152,7 @@ class MobileNet(nn.Module):
             else:
                 self.low_features =x.clone().detach()
         # low_features_layer
-    def forward(self, x):
+    def forward_store_features(self, x):
         self.feature_layer = 0
         self.store_features(x)
         x = self.conv1(x)

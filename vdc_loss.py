@@ -38,6 +38,15 @@ class VDCLoss(nn.Module):
         self.w_shp_length = self.w_shp.shape[0] // 3
 
         self.opt_style = opt_style
+    
+    def reconstruct_and_parse_one(self, input):
+        # reconstruct
+        param = input * self.param_std + self.param_mean
+
+        # parse param
+        p, offset, alpha_shp, alpha_exp = _parse_param_batch(param)
+
+        return (p, offset, alpha_shp, alpha_exp)
 
     def reconstruct_and_parse(self, input, target):
         # reconstruct

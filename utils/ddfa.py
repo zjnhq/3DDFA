@@ -13,6 +13,59 @@ import argparse
 from .io import _numpy_to_tensor, _load_cpu, _load_gpu
 from .params import *
 from pdb import *
+from utils.io import _load
+
+
+def _parse_param_batch_tensor(param):
+    """Work for both numpy and tensor"""
+    N = param.shape[0]
+    p_ = param[:, :12].view(N, 3, -1)
+    p = p_[:, :, :3]
+    offset = p_[:, :, -1].view(N, 3, 1)
+    alpha_shp = param[:, 12:52].view(N, -1, 1)
+    alpha_exp = param[:, 52:].view(N, -1, 1)
+    return p, offset, alpha_shp, alpha_exp
+
+
+def reconstruct_vertex_tensor(param, whitening=True, dense=False, transform=True):
+    # set_trace()
+    """Whitening param -> 3d vertex, based on the 3dmm param: u_base, w_shp, w_exp
+    dense: if True, return dense vertex, else return 68 sparse landmarks. All dense or sparse vertex is transformed to
+    image coordinate space, but without alignment caused by face cropping.
+    transform: whether transform to image space
+    """
+    if param.shape[1] == 12:
+        param = np.concatenate((param, [0] * 50))
+    if whitening:
+        if param.shape[1] == 62:
+            param = param * _numpy_to_tensor(param_std).cuda() + _numpy_to_tensor(param_mean).cuda()
+        else:
+            param = np.concatenate((param[:11], [0], param[11:]))
+            param = param * param_std + param_mean
+
+    (p, offset, alpha_shp, alpha_exp) = _parse_param_batch_tensor(param)
+
+    # if dense:
+    #     vertex = p @ (u + w_shp @ alpha_shp + w_exp @ alpha_exp).reshape(3, -1, order='F') + offset
+
+    #     if transform:
+    #         # transform to image coordinate space
+    #         vertex[1, :] = std_size + 1 - vertex[1, :]
+    # else:
+    #     """For 68 pts"""
+    #     vertex = p @ (u_base + w_shp_base @ alpha_shp + w_exp_base @ alpha_exp).reshape(3, -1, order='F') + offset
+
+    #     if transform:
+    #         # transform to image coordinate space
+    #         vertex[1, :] = std_size + 1 - vertex[1, :]
+
+    N = param.shape[0]
+
+    vertex = p @ (_numpy_to_tensor(u_base).cuda() + _numpy_to_tensor(w_shp_base).cuda() @ alpha_shp + _numpy_to_tensor(w_exp_base).cuda() @ alpha_exp) \
+        .view(N, -1, 3).permute(0, 2, 1) + offset
+
+    return vertex
+
 
 def _parse_param(param):
     """Work for both numpy and tensor"""
@@ -153,10 +206,23 @@ class DDFADataset(data.Dataset):
 
 
 class DDFATestDataset(data.Dataset):
-    def __init__(self, filelists, root='', transform=None):
+    def __init__(self, filelists, root='', transform=None, labeled= False):
         self.root = root
         self.transform = transform
         self.lines = Path(filelists).read_text().strip().split('\n')
+        # set_trace()
+        self.labeled = labeled
+        if self.labeled:
+            self.pts68 = _load('test.configs/AFLW2000-3D-Reannotated.pts68.npy')
+            self.pts21 = _load('test.configs/AFLW_GT_pts21.npy')
+            self.roi_boxs = _load('test.configs/AFLW2000-3D_crop.roi_box.npy')
+            # set_trace()
+            print(len(self.pts21))
+            print(len(self.roi_boxs))
+            if len(self.lines)> 2000:
+                self.targets= self.pts21
+            else:
+                self.targets= self.pts68
 
     def __getitem__(self, index):
         path = osp.join(self.root, self.lines[index])
@@ -164,7 +230,10 @@ class DDFATestDataset(data.Dataset):
 
         if self.transform is not None:
             img = self.transform(img)
-        return img
+        if self.labeled:
+            return img, self.pts68[index % self.pts68.shape[0]], self.roi_boxs[index % self.pts68.shape[0]]
+        else:
+            return img
 
     def __len__(self):
         return len(self.lines)
