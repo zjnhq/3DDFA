@@ -288,6 +288,7 @@ cdef class Splitter:
         # Note: We here show left/right_indices_buffer as being the same size
         # as sample_indices for simplicity, but in reality they are of the
         # same size as partition.
+        # printf("split_info.bin_idx: %d", split_info.bin_idx)
 
         cdef:
             int n_samples = sample_indices.shape[0]
@@ -505,13 +506,14 @@ cdef class Splitter:
                     # Note: for the categorical features above, this isn't
                     # needed since missing values are considered a native
                     # category.
+                    # printf("here 1\n")
                     self._find_best_bin_to_split_left_to_right(
                         feature_idx, has_missing_values[feature_idx],
                         histograms, n_samples, sum_gradients, sum_hessians,
                         value, monotonic_cst[feature_idx],
                         lower_bound, upper_bound, 
                         &split_infos[feature_idx], split_conservative)
-
+                    
                     if has_missing_values[feature_idx]:
                         # We need to explore both directions to check whether
                         # sending the nans to the left child would lead to a higher
@@ -522,11 +524,13 @@ cdef class Splitter:
                             value, monotonic_cst[feature_idx],
                             lower_bound, upper_bound, 
                             &split_infos[feature_idx], split_conservative)
+            # printf("here 2\n")
 
             # then compute best possible split among all features
             best_feature_idx = self._find_best_feature_to_split_helper(
                 split_infos)
             split_info = split_infos[best_feature_idx]
+            printf('gain:%f',split_info.gain)
 
         out = SplitInfo(
             split_info.gain,
@@ -559,11 +563,14 @@ cdef class Splitter:
         cdef:
             unsigned int feature_idx
             unsigned int best_feature_idx = 0
+            Y_DTYPE_C current_gain
 
         for feature_idx in range(1, self.n_features):
-            if (split_infos[feature_idx].gain >
+            current_gain = split_infos[feature_idx].gain
+            if (current_gain >
                     split_infos[best_feature_idx].gain):
                 best_feature_idx = feature_idx
+                printf("feature %d gain %f best features %d", feature_idx, current_gain, best_feature_idx)
         return best_feature_idx
 
     cdef void _find_best_bin_to_split_left_to_right(
@@ -610,7 +617,7 @@ cdef class Splitter:
 
             Y_DTYPE_C best_sum_hessian_left
             Y_DTYPE_C best_sum_gradient_left
-            unsigned int best_bin_idx
+            unsigned int best_bin_idx =0
             unsigned int best_n_samples_left
             Y_DTYPE_C best_robustness_score = -1
             Y_DTYPE_C best_gain = -1
@@ -618,6 +625,7 @@ cdef class Splitter:
             # and gain > next_gain (shifting right)
             unsigned int partial_gain = split_conservative
             unsigned int bin_idx_end = end
+            unsigned int bin_idx_start = 0
 
         sum_gradient_left, sum_hessian_left = 0., 0.
         n_samples_left = 0
@@ -625,18 +633,18 @@ cdef class Splitter:
         loss_current_node = _loss_from_value(value, sum_gradients)
 
         # partial_gain = 0 # Gain = (left_gain + right_gain) - gain
-        # start_bin_idx = 0 
-        bin_idx = 0
         if split_conservative:
             # partial_gain = 1 # Gain = max(left_gain, right_gain)
-            bin_idx = end / 4
+            bin_idx_start = end / 4
             bin_idx_end = end 
             bin_idx_end -= end / 4
+            best_bin_idx= bin_idx_start
         # printf("bin_idx:%d bin_idx_end:%d end:%d \n", bin_idx, bin_idx_end, end)
-        while bin_idx < bin_idx_end:
+        for bin_idx in range(bin_idx_start, bin_idx_end):
             n_samples_left += histograms[feature_idx, bin_idx].count
             n_samples_right = n_samples_ - n_samples_left
 
+            # printf("bin_idx:%d bin_idx_end:%d end:%d \n", bin_idx, bin_idx_end, end)
             if self.hessians_are_constant:
                 sum_hessian_left += histograms[feature_idx, bin_idx].count
             else:
@@ -668,6 +676,7 @@ cdef class Splitter:
                                self.l2_regularization, partial_gain)
             # printf("bin_idx: %d gain:%f best gain:%f \n",bin_idx, gain, best_gain)
             if gain > best_gain:
+                
                 if gain > self.min_gain_to_split:
                     found_better_split = True
                     # split_conservative = 0 #default split motive: find an optimal gain
@@ -676,16 +685,17 @@ cdef class Splitter:
                     # split_conservative = 1 #conservative split motive: find a good enough subset, and if split moves right may 
                     # best_robustness_score = robustness_score
                     best_bin_idx = bin_idx
+                    # printf("bin_idx: %d best_bin_idx:%d gain:%f best gain:%f \n",bin_idx, best_bin_idx, gain, best_gain)
                     best_sum_gradient_left = sum_gradient_left
                     best_sum_hessian_left = sum_hessian_left
                     best_n_samples_left = n_samples_left
             # robustness_score = (gain - last_gain) * n_samples_left / histograms[feature_idx, bin_idx].count
             # if robustness_score > and split 
-            bin_idx +=1
+            # bin_idx +=1
             
 
         if found_better_split:
-            split_info.gain = best_gain
+            # split_info.gain = best_gain
             split_info.bin_idx = best_bin_idx
             # we scan from left to right so missing values go to the right
             split_info.missing_go_to_left = False

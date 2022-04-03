@@ -213,10 +213,13 @@ class DDFATestDataset(data.Dataset):
         # set_trace()
         self.labeled = labeled
         if self.labeled:
+            self.pts68_ori = _load('test.configs/AFLW2000-3D.pts68.npy')
             self.pts68 = _load('test.configs/AFLW2000-3D-Reannotated.pts68.npy')
             self.pts21 = _load('test.configs/AFLW_GT_pts21.npy')
             self.roi_boxs = _load('test.configs/AFLW2000-3D_crop.roi_box.npy')
             # set_trace()
+            print(len(self.pts68_ori))
+            print(len(self.pts68))
             print(len(self.pts21))
             print(len(self.roi_boxs))
             if len(self.lines)> 2000:
@@ -231,7 +234,7 @@ class DDFATestDataset(data.Dataset):
         if self.transform is not None:
             img = self.transform(img)
         if self.labeled:
-            return img, self.pts68[index % self.pts68.shape[0]], self.roi_boxs[index % self.pts68.shape[0]]
+            return img, self.pts68_ori[index % self.pts68_ori.shape[0]], self.roi_boxs[index % self.pts68.shape[0]]
         else:
             return img
 

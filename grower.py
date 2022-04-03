@@ -11,8 +11,8 @@ import numpy as np
 from timeit import default_timer as time
 import numbers
 
-from sklearn.ensemble._hist_gradient_boosting.splitting import Splitter
-# from splitting import Splitter
+# from sklearn.ensemble._hist_gradient_boosting.splitting import Splitter
+from splitting import Splitter
 from sklearn.ensemble._hist_gradient_boosting.histogram import HistogramBuilder
 from sklearn.ensemble._hist_gradient_boosting.predictor import TreePredictor
 from sklearn.ensemble._hist_gradient_boosting.utils import sum_parallel
@@ -428,12 +428,13 @@ class TreeGrower:
             node.value,
             node.children_lower_bound,
             node.children_upper_bound,
-            # node.split_conservative,
+            node.split_conservative,
         )
-        # print(node)
+        # print(node.split_info )
         # set_trace()
-
-        if node.split_info.gain <= 0:  # no valid split
+        # print("split gain:"+str(node.split_info.gain))
+        # if node.split_info.gain <= 0:  # no valid split
+        if node.split_info.gain <= -100:
             self._finalize_leaf(node)
         else:
             heappush(self.splittable_nodes, node)
@@ -450,7 +451,7 @@ class TreeGrower:
         """
         # Consider the node with the highest loss reduction (a.k.a. gain)
         node = heappop(self.splittable_nodes)
-        # set_trace()
+        print("split idx"+str(node.split_info.bin_idx)+"\n")
 
         tic = time()
         (

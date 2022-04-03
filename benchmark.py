@@ -56,7 +56,7 @@ class GBDT_Predictor:
         # output = output * (1- alpha) + torch.tensor(batched_gbdt_predict).cuda()* alpha
         return torch.tensor(self.batched_gbdt_predict).type('torch.FloatTensor').cuda()
         # return self.batched_gbdt_predict
-
+alpha_list= [0.0,0.3,0.5,0.7,0.8,0.9]
 datafolder = 'D:/data/facealignment/'
 def extract_param(checkpoint_fp, root='', filelists=None, arch='mobilenet_1', num_classes=62, device_ids=[0],
                   batch_size=128, num_workers=4, args=[]):
@@ -75,8 +75,10 @@ def extract_param(checkpoint_fp, root='', filelists=None, arch='mobilenet_1', nu
     model.eval()
 
     end = time.time()
+
+    outputs_list = [[] for i in range(len(alpha_list))]
     outputs = []
-    alpha = 0.8
+    alpha = 0.3
     def use_gbdt(args, model):
         feat_index_filename = 'important_feature'
         gbdt_param_filename = './gbdt_param/gbdt_param'
@@ -94,50 +96,41 @@ def extract_param(checkpoint_fp, root='', filelists=None, arch='mobilenet_1', nu
 
     if args.gbdt==1:gbdt = use_gbdt(args, model)
     use_attack = 1
-    # if args.loss.lower() == 'wpdc':
-
-    criterion = WPDCLoss(opt_style='resample').cuda()
-    # logging.info('Use WPDC Loss')
-    # with torch.no_grad():
 
     std_size = 120
-    for _, (input, target, roi_boxs) in enumerate(data_loader):
-        inputs = input.cuda()
+    for iters, (input, target, roi_boxs) in enumerate(data_loader):
+        inputs = input.type(torch.FloatTensor).cuda()
+        target = target.type(torch.FloatTensor).cuda()
         if use_attack:
             input.requires_grad = True
 
         output = model(input)
         if use_attack==1:
-            set_trace()
-            pts68s = reconstruct_vertex_tensor(output)
+            # set_trace()
             for i in range(roi_boxs.shape[0]):
-                pts68 = pts68s[i]
-                pts68_gt = target[i]
-
                 sx, sy, ex, ey = roi_boxs[i]
                 scale_x = (ex - sx) / std_size
                 scale_y = (ey - sy) / std_size
-                pts68[0, :] = pts68[0, :] * scale_x + sx
-                pts68[1, :] = pts68[1, :] * scale_y + sy
-
+                target[i, 0, :] = (target[i,0, :] - sx) / scale_x 
+                target[i, 1, :] = (target[i,1, :] - sy) / scale_y 
+            # set_trace()
         if use_attack==1:
             input_original = input.clone().detach()
             attack_maxstepsize = args.attacksize #np.abs(input_original.cpu().numpy()).mean()*0.02
             input_upper_limit= input_original + attack_maxstepsize
             input_lower_limit = input_original - attack_maxstepsize
-            steps = max(int(attack_maxstepsize/0.001),5)
+            steps = min(int(attack_maxstepsize/0.001),5)
             attack_stepsize = attack_maxstepsize/steps
-            # attack_stepsize = 100000.0
             input.retain_grad()
             for attack_iter in range(steps):
-                # loss = criterion(output, target)
-                tmp = reconstruct_vertex(output[0].detach().cpu().numpy())
-                pts68 = reconstruct_vertex_tensor(output)
-                set_trace()
-                diff = (pts68 - target) ** 2
-                loss = torch.mean(diff)
+                pts68s = reconstruct_vertex_tensor(output)
+                loss = ((target[:,0,:]-pts68s[:,0,:])**2).mean()
+                # loss += ((target[:,2,:]-pts68s[:,2,:])**2).mean()
+                # set_trace()
+                if iters%30==0:
+                    print("loss:"+str(loss.item()))
                 loss.backward()
-                # input.abs().mean()/(input.grad.abs().mean())
+                # (input - input_original).abs().mean()/(input.abs().mean())
                 input.detach()
                 input.data = input.data + input.grad.sign() * attack_stepsize
                 input.data[input.data>input_upper_limit] = input_upper_limit.data[input.data>input_upper_limit]
@@ -146,22 +139,34 @@ def extract_param(checkpoint_fp, root='', filelists=None, arch='mobilenet_1', nu
                 input.retain_grad()
                 output = model(input)  
         output = output.detach()  
-        if args.gbdt==1:
-            gbdt_output = gbdt.predict(model.module.low_features, model.module.mid_features)
-
-            output = alpha * output +(1- alpha)* gbdt_output
-            # output[:,:12] = gbdt_output[:,:12]
-
-        # set_trace()
+        
         for i in range(output.shape[0]):
             param_prediction = output[i].cpu().numpy().flatten()
-
             outputs.append(param_prediction)
-            # set_trace()
+
+        if args.gbdt==1:
+            gbdt_output = gbdt.predict(model.module.low_features, model.module.mid_features)
+            for alpha_setting in range(len(alpha_list)):
+                alpha = alpha_list[alpha_setting]
+                # set_trace()
+                output_mixture = alpha * output +(1- alpha)* gbdt_output
+                # output_mixture[:,:12] = gbdt_output[:,:12]
+                
+                for i in range(output_mixture.shape[0]):
+                    param_prediction = output_mixture[i].cpu().numpy().flatten()
+                    # set_trace()
+                    outputs_list[alpha_setting].append(param_prediction)
     outputs = np.array(outputs, dtype=np.float32)
 
     print(f'Extracting params take {time.time() - end: .3f}s')
-    return outputs
+    if args.gbdt==1:
+        # for output_mixture in outputs_list:
+        #     output_mixture = np.array(output_mixture, dtype=np.float32)
+        for alpha_setting in range(len(alpha_list)):
+            outputs_list[alpha_setting] = np.array(outputs_list[alpha_setting], dtype=np.float32)
+        return outputs, outputs_list
+    else:
+        return outputs, 0
 
 
 def _benchmark_aflw(outputs):
@@ -192,7 +197,7 @@ def benchmark_pipeline(arch, checkpoint_fp, args):
     device_ids = [0]
 
     def aflw():
-        params = extract_param(
+        params, params_gbdt = extract_param(
             checkpoint_fp=checkpoint_fp,
             root=datafolder+'test.data/AFLW_GT_crop',
             filelists=datafolder+'test.data/AFLW_GT_crop.list',
@@ -201,9 +206,14 @@ def benchmark_pipeline(arch, checkpoint_fp, args):
             batch_size=32, args=args)
 
         benchmark_alfw_params(params)
+        if args.gbdt==1:
+            for alpha_setting in range(len(params_gbdt)):
+                param_gbdt = params_gbdt[alpha_setting]
+                print("with alpha:"+str(alpha_list[alpha_setting]))
+                benchmark_alfw_params(param_gbdt)
 
     def aflw2000():
-        params = extract_param(
+        params, params_gbdt = extract_param(
             checkpoint_fp=checkpoint_fp,
             root=datafolder+'test.data/AFLW2000-3D_crop',
             filelists=datafolder+'test.data/AFLW2000-3D_crop.list',
@@ -212,9 +222,14 @@ def benchmark_pipeline(arch, checkpoint_fp, args):
             batch_size=32, args=args)
 
         benchmark_aflw2000_params(params)
+        if args.gbdt==1:
+            for alpha_setting in range(len(params_gbdt)):
+                param_gbdt = params_gbdt[alpha_setting]
+                print("with alpha:"+str(alpha_list[alpha_setting]))
+                benchmark_aflw2000_params(param_gbdt)
 
     aflw2000()
-    aflw()
+    # aflw()
 
 
 def main():
@@ -223,7 +238,7 @@ def main():
     parser.add_argument('-c', '--checkpoint-fp', default='models/phase1_wpdc_vdc.pth.tar', type=str)
     parser.add_argument('--gbdt', default=1, type=int)
     args = parser.parse_args()
-    args.attacksize = 0.01
+    args.attacksize = 0.03
 
     benchmark_pipeline(args.arch, args.checkpoint_fp, args)
 

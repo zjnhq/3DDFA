@@ -77,6 +77,33 @@ Extracting params take  293.536s
 [60, 90]        Mean: 7.214, Std: 7.590
 [ 0, 90]        Mean: 6.112, Std: 0.890
 
+
+alpha = 0
+(base) PS D:\code\face\3DDFA> python ./benchmark.py
+Extracting params take  49.832s
+[ 0, 30]        Mean: 4.520, Std: 2.479
+[30, 60]        Mean: 5.603, Std: 3.754
+[60, 90]        Mean: 7.146, Std: 4.409
+[ 0, 90]        Mean: 5.757, Std: 1.078
+Extracting params take  295.753s
+[ 0, 30]        Mean: 6.011, Std: 4.798
+[30, 60]        Mean: 7.285, Std: 6.487
+[60, 90]        Mean: 8.229, Std: 8.241
+[ 0, 90]        Mean: 7.175, Std: 0.909
+
+attack gbdt
+
+(base) PS D:\code\face\3DDFA> python ./benchmark.py
+2000
+2000
+21080
+2000
+Extracting params take  330.004s
+[ 0, 30]        Mean: 5.678, Std: 3.624
+[30, 60]        Mean: 7.874, Std: 5.539
+[60, 90]        Mean: 11.025, Std: 8.039
+[ 0, 90]        Mean: 8.192, Std: 2.194
+
 cnn
 (base) PS D:\code\face\3DDFA> python ./benchmark.py -c models/phase1_wpdc_vdc.pth.tar
 Extracting params take  34.852s
