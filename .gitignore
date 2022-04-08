@@ -56,3 +56,6 @@ splitting.cp39-win_amd64.pyd
 splitting.c
 res/AFLW-2000-3D/*
 gbdt_feature_vdc/*.pkl
+gbdt_param_vdc/*layer4_12_batch*
+gbdt_param_vdc/*layer8_15_batch*
+gbdt_param_vdc/*layer6_12_batch*

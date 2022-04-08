@@ -26,7 +26,8 @@ iris = load_iris()
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
-from gradient_boosting import HistGradientBoostingClassifier
+# from gradient_boosting import HistGradientBoostingClassifier
+from sklearn.ensemble import HistGradientBoostingClassifier
 # Parameters
 n_classes = 3
 plot_colors = "ryb"
@@ -36,7 +37,8 @@ plt.figure(figsize=(10, 10))
 for fig_id in range(2):
 	
 
-	for pairidx, pair in enumerate([[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]]):
+	# for pairidx, pair in enumerate([[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]]):
+	for pairidx, pair in enumerate([[0, 1],  [0, 3], [2, 3]]):
 		# We only take the two corresponding features
 		X = iris.data[:, pair]
 		y = iris.target
@@ -57,13 +59,13 @@ for fig_id in range(2):
 				params= clf.get_params()
 				params['max_iter'] = params['max_iter']+ 1
 				params['warm_start'] = True
-				params['max_bins'] = params['max_bins']+ params['max_bins'] +1
-				params['max_leaf_nodes'] = params['max_leaf_nodes']+ params['max_leaf_nodes'] +1
+				params['max_bins'] = params['max_bins']+ max_bins +1
+				params['max_leaf_nodes'] = params['max_leaf_nodes']+ max_leaf_nodes +1
 				clf.set_params(**params)
 				clf.fit(X,y)
 
 		# Plot the decision boundary
-		plt.subplot(2, 6, pairidx + 1 + int(fig_id*6))
+		plt.subplot(2, 3, pairidx + 1 + int(fig_id*3))
 
 		x_min, x_max = X[:, 0].min() - 1, X[:, 0].max() +X[:, 0].max() + 1
 		y_min, y_max = X[:, 1].min() - 1, X[:, 1].max() + 1

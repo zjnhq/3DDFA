@@ -222,7 +222,7 @@ def draw_landmarks(img, pts, style='fancy', wfp=None, show_flg=False, note =None
             alpha = 0.8
             markersize = 4
             lw = 1.5
-            lw = 3.5
+            lw = 5.5
             color = kwargs.get('color', 'w')
             markeredgecolor = kwargs.get('markeredgecolor', 'black')
 
