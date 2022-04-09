@@ -40,7 +40,7 @@ n_classes = 2
 plot_colors = "ryb"
 # iris = load_iris()
 import numpy as np 
-n = 800 
+n = 300 
 d= 2
 x= np.random.randn(n,d)
 c1 = np.array([-1,-1.5])
@@ -86,13 +86,13 @@ for i, color in zip(range(n_classes), plot_colors):
         s=15,
     )
 # plt.suptitle("Comparison between strategy for searching optimal split: greedy or conservative")
-plt.title("conservative split over possible bins")
+plt.title("conservative split over quantile")
 plt.legend(loc="lower right", borderpad=0, handletextpad=0)
 _ = plt.axis("tight")
 
 plt.subplot(2,2,2)
 xsort= np.sort(x[:,0])
-index = [int(mid + i *25) for i in range(-4,4)]
+index = [int(mid + i *8) for i in range(-4,4)]
 
 for i, color in zip(range(n_classes), plot_colors):
     idx = np.where(y == i)
@@ -108,13 +108,13 @@ for i in range(1,len(index)):
     x1, y1 = [xsort[index[i]], xsort[index[i]]], [-5, 5]
     # x2, y2 = bound[i], 3
     plt.plot(x1, y1,  marker = '.')
-plt.title("greedy split over dense samples")
+plt.title("greedy split over dense candidates")
 
 
 plt.subplot(2,2,3)
 # for i in range(1,factor):
-i = 3
-x1fixed, y1fixed = [bound[i], bound[i]], [-5, 5]
+vertical_split = 2
+x1fixed, y1fixed = [bound[vertical_split], bound[vertical_split]], [-5, 5]
 # x2, y2 = bound[i], 3
 plt.plot(x1fixed, y1fixed,  marker = '.')
 
@@ -123,8 +123,14 @@ for i in range(factor):
     quant[i] = float(i)/factor
 # np.argpartition(, quant)[: num_feat]
 bound =np.quantile(x[:,1], quant)
-for i in range(1,factor):
-    x1, y1 =  [x1fixed[0], 5], [bound[i], bound[i]]
+horizontal_split = 4
+for i in range(1,horizontal_split):
+    x1, y1 =  [x1fixed[0],5], [bound[i], bound[i]]
+    # x2, y2 = bound[i], 3
+    plt.plot(x1, y1,  marker = '.')
+
+for i in range(horizontal_split+1,factor):
+    x1, y1 =  [-5,x1fixed[0]], [bound[i], bound[i]]
     # x2, y2 = bound[i], 3
     plt.plot(x1, y1,  marker = '.')
 
@@ -139,7 +145,7 @@ for i, color in zip(range(n_classes), plot_colors):
         s=15,
     )
 # plt.suptitle("Comparison between strategy for searching optimal split: greedy or conservative")
-plt.title("greedy growth of tree depth with more splits")
+plt.title("greedy growth in depth")
 plt.legend(loc="lower right", borderpad=0, handletextpad=0)
 _ = plt.axis("tight")
 
@@ -163,7 +169,7 @@ x1, y1 = [xsort[index[i]], xsort[index[i]]], [-5, 5]
 # x2, y2 = bound[i], 3
 plt.plot(x1, y1,  marker = '.')
 plt.gca.legend_ =None
-plt.title("conservative growth of tree depth with limited splits")
+plt.title("conservative growth in depth")
 plt.show()
 
 # In[38]:

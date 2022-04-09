@@ -13,7 +13,7 @@ for content in plot_contents:
 		n_file_per_person = 6
 
 	n_person_per_row = 2
-	n_row = 5
+	n_row = 7
 	n_col = n_file_per_person * n_person_per_row
 	fig, axs = plt.subplots(nrows=n_row, ncols=n_col, figsize=(20, 20),
 							subplot_kw={'xticks': [], 'yticks': []})
@@ -36,7 +36,7 @@ for content in plot_contents:
 	pncc_files3 = list()
 	pose_files3 = list()
 	# person_id_list = [1,2, 3]
-	for person_id in range(7, n_person+7):
+	for person_id in range(3, n_person+3):
 		ptx_file_name = prefix + str(person_id) +'orig_gt.jpg'
 		ptx_files.append(cv2.imread(ptx_file_name, cv2.IMREAD_COLOR))
 		ptx_file_name2 = prefix + str(person_id) +'attack_cnn.jpg'
@@ -109,5 +109,6 @@ for content in plot_contents:
 			if subplot_id%n_file_per_person==0:
 				person_id += 1
 	savefile = 'plot/comparison_' + content + '.png'
+	plt.tight_layout()
 	plt.savefig(savefile, dpi=100)
 	plt.show()
