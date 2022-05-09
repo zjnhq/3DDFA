@@ -1,4 +1,4 @@
-python train.py --arch="mobilenet_1" ^
+python train_cst.py --arch="mobilenet_1" ^
     --start-epoch=1 ^
     --gbdt=1 ^
     --alpha=0.6 ^
