@@ -12,6 +12,7 @@ import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
 import torch.nn.functional as F
+from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader
 import mobilenet_v1
 import torch.backends.cudnn as cudnn
@@ -138,7 +139,7 @@ class ConvSplitTree2(nn.Module):
         if self.is_regression ==1:
             self.convSplit = nn.Conv2d(guide_in_channels, self.sum_out_channels, kernel_size=1, stride=stride, padding=0, bias=False).type(torch.FloatTensor)
             nn.init.uniform_(self.convSplit.weight)
-            self.convSplit.weight.data *=0.01
+            self.convSplit.weight.data *=0.001
         self.out_channels = out_channels
         self.convPred = nn.Conv2d(in_channels, self.sum_out_channels, kernel_size, stride=stride, padding=pad, dilation=dilation, bias=True).type(torch.FloatTensor)
         nn.init.uniform_(self.convPred.weight)
@@ -146,14 +147,14 @@ class ConvSplitTree2(nn.Module):
         self.normalize_weight_iter = False
         self.kernel_size = kernel_size
         self.resize_small = resize_small
-        self.softmax_weight = 0.2
+        self.softmax_weight = 2.0
 
 
     def set_eval(self, eval_= True):
         if eval_:
-            self.softmax_weight = 5.8
+            self.softmax_weight = 2
         else:
-            self.softmax_weight = 0.2
+            self.softmax_weight = 1.0
     def forward(self,x, data):
         if x.shape[2]< data.shape[2]:
             if self.resize_small ==1:
@@ -319,12 +320,13 @@ def train_cst(train_loader, model, criterion, optimizer, args):
         del model.module.mid_features
         break
     torch.cuda.empty_cache()
-    tree_depth = 3
+    tree_depth = 4
     in_channels = mid_features.shape[1]
     gc=rawfeatures.shape[1]
     cst = ConvSplitBT(tree_depth, in_channels, out_channels= 62, kernel_size=3, stride=1, pad=1, dilation=1, guide_in_channels = gc, n_split=2, resize_small=1, is_regression=1)
     cst = cst.cuda()
     cst_optimizer = torch.optim.Adadelta(cst.parameters(), lr=1.0)
+    scheduler = StepLR(cst_optimizer, step_size=1, gamma=0.97)
 
     # batched_mid_features= np.zeros([batch_size, feature_dim])
     
@@ -359,11 +361,13 @@ def train_cst(train_loader, model, criterion, optimizer, args):
         del input
         # if i>500:break
         if i % args.print_freq==0:
+            scheduler.step()
             print("train cst for:"+str(i))
             elapse = time.time() - end
             logging.info(f' Time {elapse/60:.3f} Val: [{i} /{len(train_loader)}] Loss {loss.item():.3f}\t')
             end=time.time()
         if i % (args.print_freq*10)==0:
+            
             pkl.dump(cst,open('cst_model.pkl','wb'))
             save_checkpoint(
                             {
@@ -482,7 +486,7 @@ def validate_cst(val_loader, model, criterion, args):
             attack_maxstepsize = args.attacksize #np.abs(input_original.cpu().numpy()).mean()*0.02
             input_upper_limit= input_original + attack_maxstepsize
             input_lower_limit = input_original - attack_maxstepsize
-            steps = max(int(attack_maxstepsize/0.001),5)
+            steps = max(int(attack_maxstepsize/0.005),5)
             attack_stepsize = attack_maxstepsize/steps
             # attack_stepsize = 100000.0
             input.retain_grad()
@@ -582,10 +586,11 @@ def validate_gbdt(val_loader, model, criterion, args):
 
         if use_attack==1:
             input_original = input.clone().detach()
-            attack_maxstepsize = args.attacksize #np.abs(input_original.cpu().numpy()).mean()*0.02
+            # attack_maxstepsize = args.attacksize #np.abs(input_original.cpu().numpy()).mean()*0.02
+            attack_maxstepsize = 0.02
             input_upper_limit= input_original + attack_maxstepsize
             input_lower_limit = input_original - attack_maxstepsize
-            steps = max(int(attack_maxstepsize/0.001),5)
+            steps = max(int(attack_maxstepsize/0.005),5)
             attack_stepsize = attack_maxstepsize/steps
             # attack_stepsize = 100000.0
             input.retain_grad()
@@ -634,7 +639,8 @@ from copy import deepcopy
 def plot_gbdt(val_loader, model, criterion, args, use_gbdt, use_attack):
     
     alpha = args.alpha
-    gbdt = GBDT_Predictor(feat_index_filename + args.layer_spec_suffix + '.pkl', gbdt_param_filename)
+    # gbdt = GBDT_Predictor(feat_index_filename + args.layer_spec_suffix + '.pkl', gbdt_param_filename)
+    cst = pkl.load(open('cst_model.pkl','rb'))
 
     model.module.SetMidfeatureNeedGrad(False)
     model.module.SetFeatureLayers(args.feature_layers)
@@ -693,7 +699,7 @@ def plot_gbdt(val_loader, model, criterion, args, use_gbdt, use_attack):
 
         if use_gbdt==1: 
             testid+=1
-            output_gbdt = gbdt.predict(model.module.low_features, model.module.mid_features).type(torch.cuda.FloatTensor)
+            output_gbdt = cst(model.module.low_features, model.module.mid_features).type(torch.cuda.FloatTensor)
             # set_trace()
             loss_gbdt = criterion(output_gbdt, target)
             outputdict[testid] = output_gbdt.clone().squeeze().detach().cpu().numpy()
@@ -702,10 +708,10 @@ def plot_gbdt(val_loader, model, criterion, args, use_gbdt, use_attack):
 
         if use_attack==1:
             input_original = input.clone().detach()
-            attack_maxstepsize = 0.01  # 0.01#np.abs(input_original.cpu().numpy()).mean()*0.02
+            attack_maxstepsize = 0.02  # 0.01#np.abs(input_original.cpu().numpy()).mean()*0.02
             input_upper_limit= input_original + attack_maxstepsize
             input_lower_limit = input_original - attack_maxstepsize
-            steps = max(int(attack_maxstepsize/0.002),5)
+            steps = max(int(attack_maxstepsize/0.005),5)
             attack_stepsize = attack_maxstepsize/steps
             # print("prediction before:"+str(output[0,-6:]))
             input.requires_grad = True
@@ -1005,7 +1011,7 @@ def main():
 
     if args.gbdt==1:
         # for feature_layers in [ [8,15], [12,15], [0,12]]:
-        args.attacksize = 0.01
+        args.attacksize = 0.02
         # try:
             
         feature_layers = [8,15]
@@ -1028,7 +1034,7 @@ def main():
         # feature_layers = [6,12]
         # args.feature_layers = feature_layers
 
-        plot_result = 1
+        plot_result = 0
         if plot_result:
             plot_dataset = DDFAPlotDataset(
                 root=args.root,
